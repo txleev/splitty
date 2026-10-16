@@ -2,23 +2,46 @@ services:
   ocr:
     build: .
     image: ocr-mvp:latest
+    container_name: ocr-mvp
+    # Keeps the service up (and the models warm) across crashes and reboots.
+    restart: unless-stopped
+    # Run as the host user so files written to the bind mounts are owned by you.
+    # Set UID and GID in .env (see .env.example).
+    user: "${UID:-1000}:${GID:-1000}"
     environment:
-      # Paddle caches models under $HOME; the container user has no home directory.
-      HOME: /tmp
-    # Pass the input file path as seen inside the container, e.g.:
-    #   docker compose run --rm ocr /input/your_image.png
-    command: ["/input/sample.png"]
-    # Bind mounts are explicit and must already exist on the host. create_host_path: false
-    # stops Docker from creating missing folders as root.
+      APP_MODULE: server:app
+      HOME: /models
+      PADDLE_PDX_CACHE_HOME: /models/.paddlex
+    ports:
+      - "8000:8000"
+    # Bind mounts are read-write and created on the host if missing, so you can freely
+    # add, edit and delete files in these folders.
     volumes:
       - type: bind
         source: ./input
         target: /input
-        read_only: true
         bind:
-          create_host_path: false
+          create_host_path: true
       - type: bind
         source: ./output
         target: /output
         bind:
+          create_host_path: true
+      - type: bind
+        source: ./models
+        target: /models
+        bind:
+          create_host_path: true
+      # Mount the code so edits to server.py apply after `docker compose restart`
+      # without rebuilding the image.
+      - type: bind
+        source: ./
+        target: /app
+        bind:
           create_host_path: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 300s
+      retries: 3
