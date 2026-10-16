@@ -1,0 +1,24 @@
+services:
+  ocr:
+    build: .
+    image: ocr-mvp:latest
+    environment:
+      # Paddle caches models under $HOME; the container user has no home directory.
+      HOME: /tmp
+    # Pass the input file path as seen inside the container, e.g.:
+    #   docker compose run --rm ocr /input/your_image.png
+    command: ["/input/sample.png"]
+    # Bind mounts are explicit and must already exist on the host. create_host_path: false
+    # stops Docker from creating missing folders as root.
+    volumes:
+      - type: bind
+        source: ./input
+        target: /input
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./output
+        target: /output
+        bind:
+          create_host_path: false
