@@ -50,7 +50,10 @@ class ItemOut(BaseModel):
     total_minor: int
     missing: list[str]
     preassigned_names: list[str]
+    # The host marked this item to be shared. Each guest who claims it (quantity 1) pays the same share.
+    split_equally: bool
     # Quantity minus everyone's claims. Below zero means the item is over-claimed.
+    # For an equal split it is 1 while nobody has joined it and 0 after.
     remaining: float
     claims: list[ClaimOut]
 
@@ -136,6 +139,7 @@ class ItemIn(BaseModel):
     quantity: float = Field(default=1, gt=0, le=10000)
     unit_price_minor: int | None = None
     total_minor: int
+    split_equally: bool = False
 
 
 class ItemPatch(BaseModel):
@@ -143,6 +147,7 @@ class ItemPatch(BaseModel):
     quantity: float | None = Field(default=None, gt=0, le=10000)
     unit_price_minor: int | None = None
     total_minor: int | None = None
+    split_equally: bool | None = None
 
 
 class MemberIn(BaseModel):

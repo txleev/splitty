@@ -7,9 +7,18 @@ export default function App() {
   return (
     <>
       <header className="topbar">
-        <Link to="/" className="brand">
-          Splitty
-        </Link>
+        <div className="topbar-inner">
+          <Link to="/" className="brand">
+            <span className="brand-mark" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" />
+                <path d="M12 8v6" />
+                <path d="M9 11h6" />
+              </svg>
+            </span>
+            Splitty
+          </Link>
+        </div>
       </header>
       <main className="page">
         <Routes>

@@ -1,5 +1,6 @@
 import { setMemberPaid } from '../api/sessions'
 import type { Payment, Session, Share } from '../api/types'
+import { Collapsible } from '../components/Collapsible'
 import { ErrorNotice, Pill, type Tone } from '../components/ui'
 import { formatMoney } from '../lib/money'
 import { useAction } from '../lib/useAction'
@@ -27,8 +28,11 @@ export function PaymentsPanel({ sessionId, currency, shares, hostToken, applySes
   }
 
   return (
-    <section className="card stack">
-      <h2>Payments</h2>
+    <Collapsible
+      title="Payments"
+      defaultOpen
+      summary={`${shares.filter((share) => share.payment === 'paid').length} of ${shares.length} paid`}
+    >
       <p className="muted small">
         Guests mark their own share paid. You can mark a cash payment here as well.
       </p>
@@ -39,9 +43,14 @@ export function PaymentsPanel({ sessionId, currency, shares, hostToken, applySes
           const status = STATUS[share.payment]
           return (
             <li key={share.member_id} className="member-row">
-              <div>
-                <strong>{share.name}</strong>
-                <div className="muted small">{formatMoney(share.total_minor, currency)}</div>
+              <div className="member-main">
+                <span className="avatar" aria-hidden="true">
+                  {share.name.charAt(0)}
+                </span>
+                <div>
+                  <strong>{share.name}</strong>
+                  <div className="muted small">{formatMoney(share.total_minor, currency)}</div>
+                </div>
               </div>
               <div className="row">
                 <Pill tone={status.tone}>{status.label}</Pill>
@@ -58,6 +67,6 @@ export function PaymentsPanel({ sessionId, currency, shares, hostToken, applySes
           )
         })}
       </ul>
-    </section>
+    </Collapsible>
   )
 }

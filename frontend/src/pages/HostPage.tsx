@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
-import { GuestQrCode } from '../components/GuestQrCode'
 import { SessionGone } from '../components/SessionGone'
 import { LiveBadge, Notice, Pill } from '../components/ui'
 import { BillForm } from '../host/BillForm'
@@ -8,7 +7,9 @@ import { FinishCard } from '../host/FinishCard'
 import { GuestsPanel } from '../host/GuestsPanel'
 import { ItemEditor } from '../host/ItemEditor'
 import { PaymentsPanel } from '../host/PaymentsPanel'
+import { ShareCard } from '../host/ShareCard'
 import type { Session } from '../api/types'
+import { formatMoney } from '../lib/money'
 import { loadHostToken } from '../lib/storage'
 import { useLiveSession } from '../lib/useLiveSession'
 
@@ -52,9 +53,9 @@ function HostView({ sessionId }: { sessionId: string }) {
 
   return (
     <>
-      <section className="card stack">
+      <header className="hero">
         <div className="row between">
-          <h1>Review the bill</h1>
+          <p className="eyebrow">Check &amp; share</p>
           <div className="row">
             <Pill tone={session.status === 'ready' ? 'ok' : 'warn'}>
               {session.status === 'ready' ? 'Ready' : 'Draft'}
@@ -62,16 +63,14 @@ function HostView({ sessionId }: { sessionId: string }) {
             <LiveBadge state={state} />
           </div>
         </div>
-        <label className="field">
-          <span>Guest link</span>
-          <input readOnly value={guestUrl} onFocus={(event) => event.currentTarget.select()} />
-        </label>
-        <div className="row">
-          <CopyButton text={guestUrl} />
-          <Link to={`/s/${session.session_id}`}>Open the guest page</Link>
-        </div>
-        <GuestQrCode value={guestUrl} />
-      </section>
+        <h1 className="display">Your receipt, decoded.</h1>
+        <p className="lead">
+          {session.items.length} {session.items.length === 1 ? 'item' : 'items'}
+          {session.total_minor !== null && ` · ${formatMoney(session.total_minor, session.currency)}`}
+        </p>
+      </header>
+
+      <ShareCard guestUrl={guestUrl} ready={session.status === 'ready'} />
 
       {session.warnings.length > 0 && (
         <Notice tone="warn">
@@ -84,13 +83,13 @@ function HostView({ sessionId }: { sessionId: string }) {
         </Notice>
       )}
 
+      <ItemEditor session={session} hostToken={hostToken} applySession={applySession} />
       <BillForm
         key={billKey(session)}
         session={session}
         hostToken={hostToken}
         applySession={applySession}
       />
-      <ItemEditor session={session} hostToken={hostToken} applySession={applySession} />
       <GuestsPanel session={session} hostToken={hostToken} applySession={applySession} />
       <FinishCard session={session} hostToken={hostToken} applySession={applySession} />
       {session.locked && session.shares && (
@@ -117,24 +116,4 @@ function billKey(session: Session): string {
     session.host_payment_handle,
     session.host_payment_platform,
   ])
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-    } catch {
-      // Clipboard access is blocked on some plain-http pages. The link field can still be selected.
-      setCopied(false)
-    }
-  }
-
-  return (
-    <button type="button" className="btn btn-small" onClick={() => void copy()}>
-      {copied ? 'Copied' : 'Copy link'}
-    </button>
-  )
 }

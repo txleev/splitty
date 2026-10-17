@@ -7,9 +7,10 @@ export interface ItemFormValues {
   quantity: string
   unitPrice: string
   total: string
+  splitEqually: boolean
 }
 
-export const EMPTY_ITEM_FORM: ItemFormValues = { name: '', quantity: '1', unitPrice: '', total: '' }
+export const EMPTY_ITEM_FORM: ItemFormValues = { name: '', quantity: '1', unitPrice: '', total: '', splitEqually: false }
 
 /** Checks the item form and builds the request body. Returns the first problem as a sentence. */
 export function readItemForm(values: ItemFormValues): { input: ItemInput } | { error: string } {
@@ -31,6 +32,12 @@ export function readItemForm(values: ItemFormValues): { input: ItemInput } | { e
     return { error: 'Enter the line total, like 7.00.' }
   }
   return {
-    input: { name, quantity, unit_price_minor: unit.minor, total_minor: total.minor },
+    input: {
+      name,
+      quantity,
+      unit_price_minor: unit.minor,
+      total_minor: total.minor,
+      split_equally: values.splitEqually,
+    },
   }
 }

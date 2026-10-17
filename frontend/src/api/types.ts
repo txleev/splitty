@@ -24,7 +24,10 @@ export interface Item {
   total_minor: number
   missing: string[]
   preassigned_names: string[]
+  // The host marked it to be shared. Guests join with a claim of 1 and pay equal shares.
+  split_equally: boolean
   // Quantity minus all claims. Below zero means the item is over-claimed.
+  // For an equal split it is 1 until somebody joins, then 0.
   remaining: number
   claims: Claim[]
 }
@@ -91,6 +94,7 @@ export interface ItemInput {
   quantity: number
   unit_price_minor: number | null
   total_minor: number
+  split_equally: boolean
 }
 
 export interface ItemPatch {
@@ -98,4 +102,5 @@ export interface ItemPatch {
   quantity?: number
   unit_price_minor?: number | null
   total_minor?: number
+  split_equally?: boolean
 }

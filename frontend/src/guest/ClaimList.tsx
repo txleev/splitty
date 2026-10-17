@@ -38,7 +38,7 @@ function ClaimRow({ item, currency, memberId, busy, onClaim }: Omit<Props, 'item
   const limit = memberId === null ? 0 : maxClaim(item, memberId)
   const others = item.claims
     .filter((claim) => claim.member_id !== memberId)
-    .map((claim) => `${claim.name} ${formatQuantity(claim.quantity)}`)
+    .map((claim) => (item.split_equally ? claim.name : `${claim.name} ${formatQuantity(claim.quantity)}`))
 
   return (
     <li className="claim-row">
@@ -52,7 +52,20 @@ function ClaimRow({ item, currency, memberId, busy, onClaim }: Omit<Props, 'item
         {others.length > 0 && <span className="muted small">With {others.join(', ')}</span>}
       </div>
 
-      {memberId !== null && (
+      {memberId !== null && item.split_equally && (
+        <label className="check check-join">
+          <input
+            type="checkbox"
+            checked={own > 0}
+            disabled={busy}
+            aria-label={`Split ${item.name} equally`}
+            onChange={(event) => onClaim(item.id, event.target.checked ? 1 : 0)}
+          />
+          <span>I'm in</span>
+        </label>
+      )}
+
+      {memberId !== null && !item.split_equally && (
         <div className="stepper">
           <button
             type="button"
@@ -80,6 +93,13 @@ function ClaimRow({ item, currency, memberId, busy, onClaim }: Omit<Props, 'item
 }
 
 function ClaimStatus({ item }: { item: Item }) {
+  if (item.split_equally) {
+    const count = item.claims.length
+    if (count === 0) {
+      return <Pill tone="warn">Split equally · nobody in yet</Pill>
+    }
+    return <Pill tone="ok">Split equally · {count} {count === 1 ? 'person' : 'people'}</Pill>
+  }
   if (item.remaining > 0) {
     return <Pill tone="warn">{formatQuantity(item.remaining)} unclaimed</Pill>
   }

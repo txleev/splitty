@@ -39,6 +39,7 @@ Base URL in the compose stack: `http://127.0.0.1:8001`.
 - Host actions send the token in the `X-Host-Token` header. Guest actions send `X-Member-Token`.
 - Claims stay attached to their item when the host edits it. If a quantity drops below what guests claimed, the item is over-claimed (`remaining` < 0). Affected guests can't confirm until they lower their claims.
 - A confirmation becomes `needs_reconfirm` when the amounts change after the guest confirmed. Changing a claim clears the confirmation.
+- An item with `split_equally: true` is claimed with `quantity` 1 (join) or 0 (leave). Everyone who joined pays an equal share of the line total, and it counts as claimed once one guest is in. Changing the flag deletes that item's claims.
 - A split locks when every item is fully claimed, every joined guest has confirmed the current bill, and the bill adds up. `blockers` lists what is still missing.
 - `shares` holds each joined guest's exact amounts, but only while the split is locked. Before that it is `null`.
 - A guest's part of a line is their claimed quantity over the line quantity, times the line total. Tax and tip follow each guest's subtotal. The shares always add up to the total. Rounding goes to the largest remainders, and ties go to the earlier joiner.

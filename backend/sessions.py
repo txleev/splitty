@@ -40,7 +40,7 @@ SESSION_FIELDS = BILL_FIELDS | PAYMENT_FIELDS
 # A payment handle is a username or tag. Links, spaces and slashes are refused, so the payment
 # link built from it always goes where the host meant.
 HANDLE_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
-NON_EMPTY_ITEM_FIELDS = {"name", "quantity", "total_minor"}
+NON_EMPTY_ITEM_FIELDS = {"name", "quantity", "total_minor", "split_equally"}
 # Renaming an item does not change what anyone owes. Every other item field does.
 NAME_ONLY = {"name"}
 # Editing an item field clears the parser's "missing" flag for it. The keys match structure.py.
@@ -87,7 +87,7 @@ def find_problems(
         if item.quantity <= 0:
             # Such a line could never be claimed, so its amount would be lost from the shares.
             problems.append(f"'{item.name}' has no quantity. Set it to 1 or more.")
-        elif not item.quantity.is_integer():
+        elif not item.split_equally and not item.quantity.is_integer():
             problems.append(
                 f"'{item.name}' has quantity {item.quantity:g}. Claims need whole numbers: "
                 "set the quantity to 1 and enter the line total."
@@ -139,7 +139,9 @@ def find_blockers(
     if not joined:
         blockers.append("No guests have joined yet.")
     for item in items:
-        if item.remaining > 0:
+        if item.split_equally and item.remaining > 0:
+            blockers.append(f"{item.name} needs at least one person to split it.")
+        elif item.remaining > 0:
             blockers.append(f"{item.name} has {item.remaining:g} unclaimed.")
         elif item.remaining < 0:
             blockers.append(f"{item.name} is over-claimed.")
@@ -220,13 +222,19 @@ def _read_view(conn: psycopg.Connection, session_id: str) -> SessionView:
         conn,
         """
         select id, position, name, quantity, unit_price_minor, total_minor,
-               missing, preassigned_names
+               missing, preassigned_names, split_equally
         from session_items where session_id = %s order by position
         """,
         (session_id,),
     ):
         claims = claims_by_item.get(r["id"], [])
         quantity = float(r["quantity"])
+        # An equal split has no units to count: it only needs one person in.
+        remaining = (
+            (0.0 if claims else 1.0)
+            if r["split_equally"]
+            else quantity - sum(c.quantity for c in claims)
+        )
         items.append(
             ItemOut(
                 id=r["id"],
@@ -237,7 +245,8 @@ def _read_view(conn: psycopg.Connection, session_id: str) -> SessionView:
                 total_minor=r["total_minor"],
                 missing=r["missing"],
                 preassigned_names=r["preassigned_names"],
-                remaining=quantity - sum(c.quantity for c in claims),
+                split_equally=r["split_equally"],
+                remaining=remaining,
                 claims=claims,
             )
         )
@@ -492,8 +501,10 @@ def add_item(
         )["next_position"]
         conn.execute(
             """
-            insert into session_items (session_id, position, name, quantity, unit_price_minor, total_minor)
-            values (%s, %s, %s, %s, %s, %s)
+            insert into session_items (
+                session_id, position, name, quantity, unit_price_minor, total_minor, split_equally
+            )
+            values (%s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 session_id,
@@ -502,6 +513,7 @@ def add_item(
                 item.quantity,
                 item.unit_price_minor,
                 item.total_minor,
+                item.split_equally,
             ),
         )
         _reset_draft(conn, session_id)
@@ -519,11 +531,12 @@ def update_item(
     changes = dict(changes)
     with conn.transaction():
         _require_host(conn, session_id, host_token)
-        if _row(
+        existing = _row(
             conn,
-            "select id from session_items where id = %s and session_id = %s",
+            "select id, split_equally from session_items where id = %s and session_id = %s",
             (item_id, session_id),
-        ) is None:
+        )
+        if existing is None:
             raise ApiError(404, "Item not found")
         for field in NON_EMPTY_ITEM_FIELDS & changes.keys():
             if changes[field] is None:
@@ -546,6 +559,9 @@ def update_item(
                 ),
                 [*changes.values(), cleared, item_id, session_id],
             )
+            if changes.get("split_equally", existing["split_equally"]) != existing["split_equally"]:
+                # Units and equal-split joins mean different things, so old claims no longer fit.
+                conn.execute("delete from claims where item_id = %s", (item_id,))
             _reset_draft(conn, session_id)
             if changes.keys() - NAME_ONLY:
                 _bump_bill(conn, session_id)
@@ -735,7 +751,7 @@ def set_claim(
         # Lock the item so two guests can't both take the last portion.
         item = _row(
             conn,
-            "select id, name, quantity from session_items "
+            "select id, name, quantity, split_equally from session_items "
             "where id = %s and session_id = %s for update",
             (item_id, session_id),
         )
@@ -751,15 +767,20 @@ def set_claim(
         if current_quantity == quantity:
             return _read_view(conn, session_id)
 
-        taken_by_others = _row(
-            conn,
-            "select coalesce(sum(quantity), 0) as taken from claims "
-            "where item_id = %s and member_id <> %s",
-            (item_id, member["id"]),
-        )["taken"]
-        left = item["quantity"] - taken_by_others
-        if quantity > 0 and quantity > left:
-            raise ApiError(409, f"Only {float(max(left, 0)):g} left of {item['name']}.")
+        if item["split_equally"]:
+            # Joining an equal split is a yes or no. Everyone who joined pays the same share.
+            if quantity > 1:
+                raise ApiError(422, f"{item['name']} is split equally. Join it or leave it.")
+        else:
+            taken_by_others = _row(
+                conn,
+                "select coalesce(sum(quantity), 0) as taken from claims "
+                "where item_id = %s and member_id <> %s",
+                (item_id, member["id"]),
+            )["taken"]
+            left = item["quantity"] - taken_by_others
+            if quantity > 0 and quantity > left:
+                raise ApiError(409, f"Only {float(max(left, 0)):g} left of {item['name']}.")
 
         if quantity == 0:
             conn.execute(

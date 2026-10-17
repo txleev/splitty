@@ -307,3 +307,108 @@ def test_concurrent_claims_never_exceed_the_quantity(client, monkeypatch, clean_
     cake_view = item_of(get_view(client, body), "Cake")
     assert cake_view["remaining"] == 0
     assert sum(c["quantity"] for c in cake_view["claims"]) == 3
+
+
+# Equal split
+
+def mark_split_equally(client, body, item_id, value=True):
+    resp = client.patch(
+        f"/sessions/{body['session_id']}/items/{item_id}",
+        json={"split_equally": value},
+        headers=host(body),
+    )
+    assert resp.status_code == 200, resp.text
+    make_ready(client, body)
+    return resp
+
+
+def test_equal_split_item_needs_one_person_then_is_claimed(client, split):
+    body, ana, _ = split
+    steak = steak_id(client, body)
+    mark_split_equally(client, body, steak)
+    assert item_of(get_view(client, body), "Steak")["remaining"] == 1
+
+    resp = claim(client, body, steak, 1, ana)
+
+    assert resp.status_code == 200
+    assert item_of(resp.json(), "Steak")["remaining"] == 0
+
+
+def test_equal_split_lets_any_number_of_guests_join_but_only_as_one(client, split):
+    body, ana, ben = split
+    steak = steak_id(client, body)
+    mark_split_equally(client, body, steak)
+
+    assert claim(client, body, steak, 1, ana).status_code == 200
+    assert claim(client, body, steak, 1, ben).status_code == 200
+    resp = claim(client, body, steak, 2, ana)
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Steak is split equally. Join it or leave it."
+    view = get_view(client, body)
+    assert item_of(view, "Steak")["remaining"] == 0
+    assert len(item_of(view, "Steak")["claims"]) == 2
+
+
+def test_equal_split_gives_each_guest_the_same_share(client, split):
+    body, ana, ben = split
+    steak = steak_id(client, body)
+    salad = item_of(get_view(client, body), "Salad")["id"]
+    mark_split_equally(client, body, steak)
+    claim(client, body, salad, 1, ana)
+    claim(client, body, steak, 1, ana)
+    claim(client, body, steak, 1, ben)
+    confirm(client, body, ana)
+    confirm(client, body, ben)
+
+    view = get_view(client, body)
+
+    assert view["locked"] is True
+    subtotals = {s["name"]: s["subtotal_minor"] for s in view["shares"]}
+    # Steak is 32.00, so 16.00 each. Ana also has the 14.00 salad.
+    assert subtotals == {"Ana": 3000, "Ben": 1600}
+
+
+def test_equal_split_allows_a_fractional_quantity(client, split):
+    body, ana, _ = split
+    steak = steak_id(client, body)
+    client.patch(
+        f"/sessions/{body['session_id']}/items/{steak}",
+        json={"quantity": 0.5, "split_equally": True},
+        headers=host(body),
+    )
+
+    resp = client.post(f"/sessions/{body['session_id']}/ready", headers=host(body))
+
+    assert resp.status_code == 200, resp.text
+
+
+def test_changing_the_split_mode_clears_that_items_claims(client, split):
+    body, ana, _ = split
+    steak = steak_id(client, body)
+    claim(client, body, steak, 2, ana)
+
+    mark_split_equally(client, body, steak)
+    assert item_of(get_view(client, body), "Steak")["claims"] == []
+
+    claim(client, body, steak, 1, ana)
+    mark_split_equally(client, body, steak, value=False)
+    steak_view = item_of(get_view(client, body), "Steak")
+
+    assert steak_view["claims"] == []
+    assert steak_view["remaining"] == 2
+
+
+def test_equal_split_blocks_locking_until_someone_joins_it(client, split):
+    body, ana, ben = split
+    steak = steak_id(client, body)
+    salad = item_of(get_view(client, body), "Salad")["id"]
+    mark_split_equally(client, body, steak)
+    claim(client, body, salad, 1, ana)
+    confirm(client, body, ana)
+    confirm(client, body, ben)
+
+    view = get_view(client, body)
+
+    assert view["locked"] is False
+    assert "Steak needs at least one person to split it." in view["blockers"]

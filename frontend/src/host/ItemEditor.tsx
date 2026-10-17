@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { addItem, deleteItem, updateItem } from '../api/sessions'
 import type { Item, ItemInput, ItemPatch, Session } from '../api/types'
+import { Collapsible } from '../components/Collapsible'
 import { ErrorNotice, Notice, Pill } from '../components/ui'
 import { formatQuantity } from '../lib/format'
 import { formatAmount, formatMoney, toInputValue } from '../lib/money'
@@ -29,9 +30,14 @@ export function ItemEditor({ session, hostToken, applySession }: Props) {
     }
   }
 
+  const itemsTotal = session.items.reduce((sum, item) => sum + item.total_minor, 0)
+
   return (
-    <section className="card stack">
-      <h2>Items</h2>
+    <Collapsible
+      title="Items"
+      defaultOpen
+      summary={`${session.items.length} · ${formatMoney(itemsTotal, session.currency)}`}
+    >
       <ErrorNotice error={action.error} />
       {session.items.length === 0 && <p className="muted">No items yet. Add them below.</p>}
 
@@ -48,8 +54,7 @@ export function ItemEditor({ session, hostToken, applySession }: Props) {
         ))}
       </ul>
 
-      <div className="stack">
-        <h3 className="item-subtitle">Add an item</h3>
+      <Collapsible variant="inline" title="+ Add an item" defaultOpen={session.items.length === 0}>
         <ItemForm
           initial={EMPTY_ITEM_FORM}
           submitLabel="Add item"
@@ -57,8 +62,8 @@ export function ItemEditor({ session, hostToken, applySession }: Props) {
           resetOnSuccess
           onSubmit={(input) => action.run(() => addItem(sessionId, hostToken, input))}
         />
-      </div>
-    </section>
+      </Collapsible>
+    </Collapsible>
   )
 }
 
@@ -82,6 +87,7 @@ function ItemRow({ item, currency, busy, onSave, onDelete }: RowProps) {
       patch.unit_price_minor = input.unit_price_minor
     }
     if (input.total_minor !== item.total_minor) patch.total_minor = input.total_minor
+    if (input.split_equally !== item.split_equally) patch.split_equally = input.split_equally
 
     const saved = Object.keys(patch).length === 0 || (await onSave(patch))
     if (saved) {
@@ -99,6 +105,7 @@ function ItemRow({ item, currency, busy, onSave, onDelete }: RowProps) {
             quantity: formatQuantity(item.quantity),
             unitPrice: toInputValue(item.unit_price_minor),
             total: toInputValue(item.total_minor),
+            splitEqually: item.split_equally,
           }}
           submitLabel="Save"
           busy={busy}
@@ -115,14 +122,25 @@ function ItemRow({ item, currency, busy, onSave, onDelete }: RowProps) {
         <span>{item.name}</span>
         <span className="num">{formatMoney(item.total_minor, currency)}</span>
       </div>
-      <p className="muted small">
-        {[
-          `Quantity ${formatQuantity(item.quantity)}`,
-          item.unit_price_minor !== null ? `${formatAmount(item.unit_price_minor)} each` : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')}
-      </p>
+      <div className="item-meta">
+        <p className="muted small">
+          {[
+            `Quantity ${formatQuantity(item.quantity)}`,
+            item.split_equally ? 'Split equally' : null,
+            item.unit_price_minor !== null ? `${formatAmount(item.unit_price_minor)} each` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+        <div className="item-actions">
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => setEditing(true)} disabled={busy}>
+            Edit
+          </button>
+          <button type="button" className="btn btn-small btn-ghost btn-danger" onClick={onDelete} disabled={busy}>
+            Delete
+          </button>
+        </div>
+      </div>
       {item.missing.length > 0 && (
         <Notice tone="warn">
           Missing {item.missing.map((field) => MISSING_LABELS[field] ?? field).join(', ')}. Fill it in
@@ -133,24 +151,22 @@ function ItemRow({ item, currency, busy, onSave, onDelete }: RowProps) {
         <p className="small">Note says: {item.preassigned_names.join(', ')}</p>
       )}
       <ClaimSummary item={item} />
-      <div className="row">
-        <button type="button" className="btn btn-small" onClick={() => setEditing(true)} disabled={busy}>
-          Edit
-        </button>
-        <button type="button" className="btn btn-small btn-danger" onClick={onDelete} disabled={busy}>
-          Delete
-        </button>
-      </div>
     </li>
   )
 }
 
 function ClaimSummary({ item }: { item: Item }) {
-  const who = item.claims.map((claim) => `${claim.name} ${formatQuantity(claim.quantity)}`).join(', ')
+  const who = item.claims
+    .map((claim) => (item.split_equally ? claim.name : `${claim.name} ${formatQuantity(claim.quantity)}`))
+    .join(', ')
   return (
     <div className="row small">
       <span className="muted">{who || 'Nobody has claimed it yet.'}</span>
-      {item.remaining > 0 && <Pill tone="warn">{formatQuantity(item.remaining)} unclaimed</Pill>}
+      {item.remaining > 0 && (
+        <Pill tone="warn">
+          {item.split_equally ? 'Nobody in yet' : `${formatQuantity(item.remaining)} unclaimed`}
+        </Pill>
+      )}
       {item.remaining < 0 && (
         <Pill tone="error">Over-claimed by {formatQuantity(-item.remaining)}</Pill>
       )}
@@ -172,10 +188,11 @@ function ItemForm({ initial, submitLabel, busy, resetOnSuccess = false, onSubmit
   const [values, setValues] = useState<ItemFormValues>(initial)
   const [error, setError] = useState<string | null>(null)
 
-  const field = (key: keyof ItemFormValues) => (event: ChangeEvent<HTMLInputElement>) => {
-    const next = event.target.value
-    setValues((current) => ({ ...current, [key]: next }))
-  }
+  const field =
+    (key: Exclude<keyof ItemFormValues, 'splitEqually'>) => (event: ChangeEvent<HTMLInputElement>) => {
+      const next = event.target.value
+      setValues((current) => ({ ...current, [key]: next }))
+    }
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -216,6 +233,21 @@ function ItemForm({ initial, submitLabel, busy, resetOnSuccess = false, onSubmit
       <label className="field">
         <span>Line total</span>
         <input inputMode="decimal" value={values.total} onChange={field('total')} disabled={busy} />
+      </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={values.splitEqually}
+          onChange={(event) => {
+            const checked = event.target.checked
+            setValues((current) => ({ ...current, splitEqually: checked }))
+          }}
+          disabled={busy}
+        />
+        <span>
+          Split equally
+          <span className="muted small"> Everyone who joins pays the same share. Changing this clears the item's claims.</span>
+        </span>
       </label>
       {error && <Notice tone="error">{error}</Notice>}
       <div className="row">

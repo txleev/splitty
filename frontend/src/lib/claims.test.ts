@@ -12,6 +12,7 @@ function item(overrides: Partial<Item>): Item {
     total_minor: 300,
     missing: [],
     preassigned_names: [],
+    split_equally: false,
     remaining: 1,
     claims: [],
     ...overrides,
@@ -74,5 +75,34 @@ describe('estimateSubtotal', () => {
   it('rounds each line to the nearest minor unit', () => {
     const items = [item({ quantity: 3, total_minor: 100, claims: [{ member_id: ANA, name: 'Ana', quantity: 1 }] })]
     expect(estimateSubtotal(items, ANA)).toBe(33)
+  })
+})
+
+describe('equal split', () => {
+  const cake = (claims: Item['claims']) =>
+    item({ name: 'Cake', total_minor: 1000, split_equally: true, remaining: claims.length ? 0 : 1, claims })
+
+  it('lets a guest join once, whoever else is in', () => {
+    const joined = cake([{ member_id: BEN, name: 'Ben', quantity: 1 }])
+    expect(maxClaim(joined, ANA)).toBe(1)
+    expect(maxClaim(joined, BEN)).toBe(1)
+  })
+
+  it('charges each guest an equal share of the line', () => {
+    const shared = cake([
+      { member_id: ANA, name: 'Ana', quantity: 1 },
+      { member_id: BEN, name: 'Ben', quantity: 1 },
+    ])
+    expect(estimateSubtotal([shared], ANA)).toBe(500)
+    expect(estimateSubtotal([shared], 99)).toBe(0)
+  })
+
+  it('rounds a share that does not divide evenly', () => {
+    const shared = cake([
+      { member_id: ANA, name: 'Ana', quantity: 1 },
+      { member_id: BEN, name: 'Ben', quantity: 1 },
+      { member_id: 9, name: 'Cy', quantity: 1 },
+    ])
+    expect(estimateSubtotal([shared], ANA)).toBe(333)
   })
 })

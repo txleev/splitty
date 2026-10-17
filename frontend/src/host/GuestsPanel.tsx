@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { addMember, releaseMember, removeMember, unlockMember } from '../api/sessions'
 import type { Member, Session } from '../api/types'
+import { Collapsible } from '../components/Collapsible'
 import { ErrorNotice } from '../components/ui'
 import { useAction } from '../lib/useAction'
 
@@ -15,6 +16,14 @@ function memberStatus(member: Member): string {
   if (member.confirmation === 'confirmed') return 'Confirmed'
   if (member.confirmation === 'needs_reconfirm') return 'Changed, needs to confirm again'
   return 'Joined, not confirmed'
+}
+
+function guestsSummary(members: Member[]): string {
+  if (members.length === 0) {
+    return 'None yet'
+  }
+  const joined = members.filter((member) => member.joined).length
+  return `${joined} of ${members.length} joined`
 }
 
 export function GuestsPanel({ session, hostToken, applySession }: Props) {
@@ -47,8 +56,7 @@ export function GuestsPanel({ session, hostToken, applySession }: Props) {
   }
 
   return (
-    <section className="card stack">
-      <h2>Guests</h2>
+    <Collapsible title="Guests" summary={guestsSummary(session.members)}>
       <p className="muted small">
         Add a name for each person at the table. Guests pick their name when they open the link.
       </p>
@@ -58,15 +66,20 @@ export function GuestsPanel({ session, hostToken, applySession }: Props) {
       <ul className="plain-list">
         {session.members.map((member) => (
           <li key={member.id} className="member-row">
-            <div>
-              <strong>{member.name}</strong>
-              <div className="muted small">{memberStatus(member)}</div>
+            <div className="member-main">
+              <span className={`avatar ${member.joined ? '' : 'avatar-muted'}`} aria-hidden="true">
+                {member.name.charAt(0)}
+              </span>
+              <div>
+                <strong>{member.name}</strong>
+                <div className="muted small">{memberStatus(member)}</div>
+              </div>
             </div>
             <div className="row">
               {member.joined ? (
                 <button
                   type="button"
-                  className="btn btn-small btn-danger"
+                  className="btn btn-small btn-ghost btn-danger"
                   disabled={action.busy}
                   onClick={() => release(member)}
                 >
@@ -75,7 +88,7 @@ export function GuestsPanel({ session, hostToken, applySession }: Props) {
               ) : (
                 <button
                   type="button"
-                  className="btn btn-small btn-danger"
+                  className="btn btn-small btn-ghost btn-danger"
                   disabled={action.busy}
                   onClick={() => remove(member)}
                 >
@@ -110,6 +123,6 @@ export function GuestsPanel({ session, hostToken, applySession }: Props) {
           Add guest
         </button>
       </form>
-    </section>
+    </Collapsible>
   )
 }

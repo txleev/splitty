@@ -44,7 +44,7 @@ def test_token_hash_is_deterministic_and_not_the_token():
     assert len(hash_token(token)) == 64
 
 
-def item(name="Tea", total=100, missing=(), quantity=1):
+def item(name="Tea", total=100, missing=(), quantity=1, split_equally=False):
     return ItemOut(
         id=1,
         position=1,
@@ -54,6 +54,7 @@ def item(name="Tea", total=100, missing=(), quantity=1):
         total_minor=total,
         missing=list(missing),
         preassigned_names=[],
+        split_equally=split_equally,
         remaining=quantity,
         claims=[],
     )
@@ -117,3 +118,16 @@ def test_unset_currency_subtotal_and_total_are_reported():
 
 def test_receipt_without_items_is_reported():
     assert problems([], subtotal=0, total=0) == ["The receipt has no items."]
+
+
+def test_fractional_quantity_is_fine_for_an_equal_split():
+    problems = find_problems(
+        items=[item(quantity=0.5, split_equally=True)],
+        currency="EUR",
+        subtotal_minor=100,
+        tax_minor=0,
+        tip_minor=0,
+        total_minor=100,
+    )
+
+    assert problems == []
