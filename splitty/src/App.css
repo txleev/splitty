@@ -1,0 +1,557 @@
+
+/* =========================
+   SPLITTY DASHBOARD
+========================= */
+
+:root {
+  /* Splitty brand palette */
+  --color-purple: #9F12FF;
+  --color-graphite: #3C3744;
+  --color-powder-blue: #B4C5E4;
+  --color-ivory: #FBFFF1;
+  --color-light-green: #94FBAB;
+
+  /* Interface colours */
+  --background: #3C3744;
+  --surface: #48424F;
+  --surface-hover: #554D5E;
+  --text-primary: #FBFFF1;
+  --text-secondary: #D0CAD8;
+  --border: #5A5363;
+
+  font-family: Inter, Arial, sans-serif;
+  color: var(--text-primary);
+  background: var(--background);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Main dashboard */
+
+.dashboard {
+  width: 100%;
+  max-width: 430px;
+
+  height: 100dvh;
+  min-height: 0;
+
+  margin: 0 auto;
+  padding: 15px 20px 0;
+
+  display: flex;
+  flex-direction: column;
+
+  background: var(--color-graphite);
+  color: var(--color-ivory);
+
+  overflow: hidden;
+
+}
+
+
+/* =========================
+   HEADER
+========================= */
+
+.dashboard-header,
+.chart-section,
+.balance-card {
+  flex-shrink: 0;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 8px;
+}
+
+.dashboard-header h1 {
+  font-size: 42px;
+  font-weight: 400;
+  letter-spacing: -1.5px;
+}
+
+.header-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  background: transparent;
+  color: #77747b;
+
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.header-action:hover {
+  color: var(--color-ivory);
+}
+
+/* =========================
+   PIE CHART
+========================= */
+
+.chart-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.chart-container {
+  width: 100%;
+  height: 120px;
+}
+
+.chart-caption {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.total-amount {
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--color-powder-blue);
+  margin-top: 2px;
+}
+
+/* =========================
+   BALANCE CARD
+========================= */
+
+.balance-card {
+  background: var(--color-graphite);
+  color: var(--color-ivory);
+
+  border: 1px solid var(--border);
+  border-radius: 13px;
+
+  padding: 10px 15px;
+  margin-bottom: 8px;
+
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+}
+
+.balance-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #d4d0d5;
+}
+
+.balance-card h2 {
+  font-size: 23px;
+  font-weight: 600;
+
+  color: var(--color-purple);
+  margin: 5px 0;
+}
+
+.balance-divider {
+  width: 100%;
+  height: 1px;
+
+  background: var(--border);
+  margin: 7px 0;
+}
+
+.balance-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.receive-amount {
+  color: #26733A;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+/* =========================
+   EXPENSES
+========================= */
+
+.expenses-section {
+  display: flex;
+  flex-direction: column;
+
+  flex: 1 1 0;
+  min-height: 100px;
+
+  margin-top: 5px;
+  overflow: hidden;
+
+}
+
+.section-header {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+.section-header h2 {
+  font-size: 30px;
+  font-weight: 400;
+}
+
+.section-header span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* Timeline */
+
+.expenses-scroll-area {
+  flex: 1;
+  min-height: 0;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  padding-bottom: 15px;
+
+}
+
+
+/* Hide scrollbar but keep scrolling functional */
+
+.expenses-scroll-area::-webkit-scrollbar {
+  display: none;
+}
+
+.expense-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  position: relative;
+}
+
+.expense-list::before {
+  content: "";
+
+  position: absolute;
+  top: 20px;
+  bottom: 20px;
+  left: 10px;
+
+  width: 2px;
+  background: #555158;
+}
+
+.expense-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+
+  position: relative;
+}
+
+.timeline {
+  width: 20px;
+  flex-shrink: 0;
+
+  display: flex;
+  justify-content: center;
+
+  z-index: 1;
+}
+
+.timeline-dot {
+  width: 16px;
+  height: 16px;
+
+  border-radius: 50%;
+  border: 2px solid var(--background);
+}
+
+/* Expense card */
+
+.expense-card {
+  flex: 1;
+  min-width: 0;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  padding: 11px 13px;
+
+  background: linear-gradient(
+    140deg,
+    #35343a,
+    #29282d
+  );
+
+  border: 1px solid var(--border);
+  border-radius: 13px;
+
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.15);
+}
+
+.expense-info {
+  min-width: 0;
+}
+
+.expense-info h3 {
+  font-size: 21px;
+  font-weight: 400;
+  margin-bottom: 5px;
+}
+
+.expense-info p {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.expense-amount {
+  display: block;
+
+  margin-top: 9px;
+
+  color: var(--gold);
+  font-size: 15px;
+}
+
+/* Avatars */
+
+.avatars {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+
+  padding-left: 8px;
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  border-radius: 50%;
+
+  background: #38363b;
+  border: 1px solid var(--gold-dark);
+
+  color: var(--gold);
+  font-size: 14px;
+
+  margin-left: -8px;
+}
+
+/* =========================
+   BOTTOM NAVIGATION
+========================= */
+
+
+/* Four-circle directional navigation */
+
+
+/* Compact directional navigation */
+
+.direction-nav {
+  position: relative;
+
+  width: 140px;
+  height: 140px;
+
+  margin: 0 auto;
+
+  display: grid;
+  grid-template-columns: repeat(3, 46px);
+  grid-template-rows: repeat(3, 46px);
+
+  gap: 1px;
+  place-items: center;
+
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  transform: none;
+  left: auto;
+  bottom: auto;
+}
+
+.direction-button {
+  width: 46px;
+  height: 46px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+  border: 1px solid var(--border);
+
+  background: var(--surface);
+  color: var(--color-powder-blue);
+
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.direction-button.top {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.direction-button.left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.direction-button.right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.direction-button.bottom {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.direction-button.active {
+  background: var(--color-purple);
+  color: var(--color-ivory);
+  border-color: var(--color-purple);
+}
+
+.direction-button:hover {
+  transform: scale(1.05);
+}
+
+
+
+/* =========================
+   COMPACT MOBILE TYPOGRAPHY
+========================= */
+
+/* Splitty title */
+.dashboard-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+}
+
+/* Chart information */
+.chart-caption {
+  font-size: 11px;
+}
+
+.total-amount {
+  font-size: 22px;
+}
+
+/* Amount owed card */
+.balance-label {
+  font-size: 14px;
+}
+
+.balance-card h2 {
+  font-size: 26px;
+  margin: 6px 0;
+}
+
+.balance-footer {
+  font-size: 11px;
+}
+
+.receive-amount {
+  font-size: 13px;
+}
+
+/* Expenses heading */
+.section-header h2 {
+  font-size: 21px;
+}
+
+.section-header span {
+  font-size: 11px;
+}
+
+/* Individual expense cards */
+.expense-info h3 {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.expense-info p {
+  font-size: 10px;
+}
+
+.expense-amount {
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+/* Participant initials */
+.avatar {
+  font-size: 11px;
+}
+
+
+
+@media (max-width: 360px) {
+  .direction-nav {
+    width: 170px;
+    height: 170px;
+  }
+
+  .direction-button {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+
+/* =========================
+   RESPONSIVENESS
+========================= */
+
+@media (min-width: 600px) {
+  .dashboard {
+    margin: 30px auto;
+    min-height: calc(100dvh - 60px);
+
+    border: 1px solid #3c3a40;
+    border-radius: 35px;
+
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  }
+
+  .bottom-nav {
+    bottom: 0;
+    border-radius: 25px 25px 0 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .dashboard {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .dashboard-header h1 {
+    font-size: 36px;
+  }
+
+  .expense-card {
+    padding: 12px;
+  }
+
+  .avatar {
+    width: 28px;
+    height: 28px;
+  }
+}
