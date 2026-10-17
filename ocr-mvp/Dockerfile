@@ -7,12 +7,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir \
-    paddlepaddle==3.2.0 \
-    paddleocr==3.7.0 \
-    fastapi==0.115.12 \
-    uvicorn[standard]==0.34.0 \
-    python-multipart==0.0.20
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 # The container runs as the host user (see docker-compose.yml `user:`), so there is no
 # home directory. Point HOME and the PaddleX model cache at the mounted /models volume so

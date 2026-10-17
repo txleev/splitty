@@ -12,6 +12,9 @@ services:
       APP_MODULE: server:app
       HOME: /models
       PADDLE_PDX_CACHE_HOME: /models/.paddlex
+      # Read from .env. The service refuses to start if GROQ_API_KEY is empty.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
     ports:
       - "8000:8000"
     # Bind mounts are read-write and created on the host if missing, so you can freely
