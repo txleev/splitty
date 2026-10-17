@@ -31,7 +31,7 @@ SESSION_IDLE_TTL = timedelta(days=7)
 NOT_FOUND = "This split does not exist or has expired."
 NOT_READY = "The split is not ready yet. Ask the host to finish it."
 NAME_TAKEN = "That name has already joined. Pick a different name."
-NOT_FINAL = "Shares are not final yet. Payments open once the split is locked."
+NOT_FINAL = "Confirm your items first. Your payment opens once you have confirmed."
 
 # Changing one of these can break the totals check, so the split goes back to draft.
 BILL_FIELDS = {"currency", "subtotal_minor", "tax_minor", "tip_minor", "total_minor"}
@@ -139,8 +139,11 @@ def find_blockers(
     if not joined:
         blockers.append("No guests have joined yet.")
     for item in items:
-        if item.split_equally and item.remaining > 0:
+        if item.split_equally and item.split_count is None and item.remaining > 0:
             blockers.append(f"{item.name} needs at least one person to split it.")
+        elif item.split_equally and item.remaining > 0:
+            spots = f"{item.remaining:g} more {'person' if item.remaining == 1 else 'people'}"
+            blockers.append(f"{item.name} is waiting for {spots} to split it.")
         elif item.remaining > 0:
             blockers.append(f"{item.name} has {item.remaining:g} unclaimed.")
         elif item.remaining < 0:
@@ -171,10 +174,18 @@ def _shares_out(
     tip_minor: int | None,
     paid_minor: dict[int, int | None],
 ) -> list[ShareOut]:
-    joined = [m for m in members if m.joined]
+    # A guest's amount is final for them once they confirm, whatever the others have done yet.
+    payers = [m for m in members if m.joined and m.confirmation == "confirmed"]
     shares = compute_shares(
-        items=[(item.total_minor, {c.member_id: c.quantity for c in item.claims}) for item in items],
-        member_ids=[m.id for m in joined],
+        items=[
+            (
+                item.total_minor,
+                {c.member_id: c.quantity for c in item.claims},
+                _line_units(item),
+            )
+            for item in items
+        ],
+        member_ids=[m.id for m in payers],
         tax_minor=tax_minor or 0,
         tip_minor=tip_minor or 0,
     )
@@ -188,8 +199,21 @@ def _shares_out(
             total_minor=shares[m.id].total,
             payment=_payment(paid_minor.get(m.id), shares[m.id].total),
         )
-        for m in joined
+        for m in payers
     ]
+
+
+def _line_units(item: ItemOut) -> int | None:
+    """Units on a line that claims are counted against.
+
+    An equal split with a set number of people counts those people. An open equal split, or a
+    quantity that is not whole, has no units: the claims are taken to cover the whole line.
+    """
+    if item.split_equally:
+        return item.split_count
+    if not item.quantity.is_integer():
+        return None
+    return int(item.quantity)
 
 
 def _read_view(conn: psycopg.Connection, session_id: str) -> SessionView:
@@ -222,19 +246,21 @@ def _read_view(conn: psycopg.Connection, session_id: str) -> SessionView:
         conn,
         """
         select id, position, name, quantity, unit_price_minor, total_minor,
-               missing, preassigned_names, split_equally
+               missing, preassigned_names, split_equally, split_count
         from session_items where session_id = %s order by position
         """,
         (session_id,),
     ):
         claims = claims_by_item.get(r["id"], [])
         quantity = float(r["quantity"])
-        # An equal split has no units to count: it only needs one person in.
-        remaining = (
-            (0.0 if claims else 1.0)
-            if r["split_equally"]
-            else quantity - sum(c.quantity for c in claims)
-        )
+        # An equal split counts people, not units. With a set number of people the free spots
+        # are what is left. Without one it only needs a first person in.
+        if r["split_equally"] and r["split_count"] is not None:
+            remaining = float(r["split_count"] - len(claims))
+        elif r["split_equally"]:
+            remaining = 0.0 if claims else 1.0
+        else:
+            remaining = quantity - sum(c.quantity for c in claims)
         items.append(
             ItemOut(
                 id=r["id"],
@@ -246,6 +272,7 @@ def _read_view(conn: psycopg.Connection, session_id: str) -> SessionView:
                 missing=r["missing"],
                 preassigned_names=r["preassigned_names"],
                 split_equally=r["split_equally"],
+                split_count=r["split_count"],
                 remaining=remaining,
                 claims=claims,
             )
@@ -298,7 +325,7 @@ def _read_view(conn: psycopg.Connection, session_id: str) -> SessionView:
         blockers=blockers,
         shares=(
             _shares_out(items, members, head["tax_minor"], head["tip_minor"], paid_minor)
-            if not blockers
+            if not problems and head["status"] == "ready"
             else None
         ),
     )
@@ -502,9 +529,10 @@ def add_item(
         conn.execute(
             """
             insert into session_items (
-                session_id, position, name, quantity, unit_price_minor, total_minor, split_equally
+                session_id, position, name, quantity, unit_price_minor, total_minor,
+                split_equally, split_count
             )
-            values (%s, %s, %s, %s, %s, %s, %s)
+            values (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 session_id,
@@ -514,6 +542,7 @@ def add_item(
                 item.unit_price_minor,
                 item.total_minor,
                 item.split_equally,
+                item.split_count,
             ),
         )
         _reset_draft(conn, session_id)
@@ -538,6 +567,13 @@ def update_item(
         )
         if existing is None:
             raise ApiError(404, "Item not found")
+        will_split = changes.get("split_equally", existing["split_equally"])
+        if not will_split:
+            if changes.get("split_count") is not None:
+                raise ApiError(422, "Turn on Split equally before setting how many people share it.")
+            if existing["split_equally"]:
+                # Turning the split off also drops its head count.
+                changes["split_count"] = None
         for field in NON_EMPTY_ITEM_FIELDS & changes.keys():
             if changes[field] is None:
                 raise ApiError(422, f"{field} cannot be empty")
@@ -751,7 +787,7 @@ def set_claim(
         # Lock the item so two guests can't both take the last portion.
         item = _row(
             conn,
-            "select id, name, quantity, split_equally from session_items "
+            "select id, name, quantity, split_equally, split_count from session_items "
             "where id = %s and session_id = %s for update",
             (item_id, session_id),
         )
@@ -771,6 +807,14 @@ def set_claim(
             # Joining an equal split is a yes or no. Everyone who joined pays the same share.
             if quantity > 1:
                 raise ApiError(422, f"{item['name']} is split equally. Join it or leave it.")
+            if quantity == 1 and item["split_count"] is not None:
+                others = _row(
+                    conn,
+                    "select count(*) as n from claims where item_id = %s and member_id <> %s",
+                    (item_id, member["id"]),
+                )["n"]
+                if others >= item["split_count"]:
+                    raise ApiError(409, f"{item['name']} already has all {item['split_count']} people.")
         else:
             taken_by_others = _row(
                 conn,
@@ -869,11 +913,9 @@ def _set_paid(conn: psycopg.Connection, session_id: str, member_id: int, paid: b
         return _read_view(conn, session_id)
 
     view = _read_view(conn, session_id)
-    if view.blockers:
-        raise ApiError(409, NOT_FINAL)
-    share = next((s for s in view.shares if s.member_id == member_id), None)
+    share = next((s for s in view.shares or [] if s.member_id == member_id), None)
     if share is None:
-        raise ApiError(409, "This name has not joined, so it has no share to pay.")
+        raise ApiError(409, NOT_FINAL)
     # Record the exact amount owed right now. A later change to the share shows as "changed".
     conn.execute(
         "update members set paid_amount_minor = %s, paid_at = now() where id = %s",

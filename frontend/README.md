@@ -31,7 +31,7 @@ SPLITTY_API=http://127.0.0.1:8001 npm run dev
 
 - `/`: upload a receipt photo with an optional note. Creates a split and opens the host page.
 - `/s/:id/host`: host review. Edit the bill and items, add or release guests, mark the split ready. Shows the guest link.
-- `/s/:id`: guest page. Join from the open names or type a new one. Set claims, confirm them, and see the shares once the split locks.
+- `/s/:id`: guest page. Join from the open names or type a new one. Set claims, confirm them, and pay as soon as they have confirmed. The full "who pays what" table appears once the split locks.
 
 ## Layout
 
@@ -47,5 +47,5 @@ SPLITTY_API=http://127.0.0.1:8001 npm run dev
 - Amounts are typed as decimals and sent as integers in minor units. `1 799,50` and `1799.5` both work.
 - Guests' estimated subtotals are rounded per line, so they can differ from the final shares by a cent. The page labels them as estimates.
 - A claim is a whole number of units. An item with a fractional quantity (such as 0.5) cannot be claimed, so the split cannot lock until it is changed.
-- The host can tick "Split equally" on an item. Guests then tick "I'm in" instead of using the stepper, and everyone who joined pays the same share of the line. The quantity is ignored, so a fractional quantity is fine. Changing the tick clears that item's claims.
+- The host can tick "Split equally" on an item. Guests then tick "I'm in" instead of using the stepper, and everyone who joined pays the same share of the line. The host can also set the number of people, so each share is fixed up front and guests do not have to wait for each other. The quantity is ignored, so a fractional quantity is fine. Changing the tick clears that item's claims.
 - The production build expects the same origin to serve `/api` and to pass WebSocket upgrades through to the backend. That wiring belongs to the deployment phase.

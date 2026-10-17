@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { SessionGone } from '../components/SessionGone'
-import { LiveBadge, Notice, Pill } from '../components/ui'
+import { Notice } from '../components/ui'
 import { BillForm } from '../host/BillForm'
 import { FinishCard } from '../host/FinishCard'
 import { GuestsPanel } from '../host/GuestsPanel'
@@ -54,15 +54,7 @@ function HostView({ sessionId }: { sessionId: string }) {
   return (
     <>
       <header className="hero">
-        <div className="row between">
-          <p className="eyebrow">Check &amp; share</p>
-          <div className="row">
-            <Pill tone={session.status === 'ready' ? 'ok' : 'warn'}>
-              {session.status === 'ready' ? 'Ready' : 'Draft'}
-            </Pill>
-            <LiveBadge state={state} />
-          </div>
-        </div>
+        <p className="eyebrow">Check &amp; share</p>
         <h1 className="display">Your receipt, decoded.</h1>
         <p className="lead">
           {session.items.length} {session.items.length === 1 ? 'item' : 'items'}
@@ -92,7 +84,7 @@ function HostView({ sessionId }: { sessionId: string }) {
       />
       <GuestsPanel session={session} hostToken={hostToken} applySession={applySession} />
       <FinishCard session={session} hostToken={hostToken} applySession={applySession} />
-      {session.locked && session.shares && (
+      {session.shares && session.shares.length > 0 && (
         <PaymentsPanel
           sessionId={session.session_id}
           currency={session.currency}

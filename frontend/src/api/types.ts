@@ -26,6 +26,8 @@ export interface Item {
   preassigned_names: string[]
   // The host marked it to be shared. Guests join with a claim of 1 and pay equal shares.
   split_equally: boolean
+  // How many people share an equal split. Null means whoever joins.
+  split_count: number | null
   // Quantity minus all claims. Below zero means the item is over-claimed.
   // For an equal split it is 1 until somebody joins, then 0.
   remaining: number
@@ -66,6 +68,7 @@ export interface Session {
   problems: string[]
   locked: boolean
   blockers: string[]
+  // Guests who confirmed the current bill. A guest does not wait for the others.
   shares: Share[] | null
 }
 
@@ -95,6 +98,7 @@ export interface ItemInput {
   unit_price_minor: number | null
   total_minor: number
   split_equally: boolean
+  split_count: number | null
 }
 
 export interface ItemPatch {
@@ -103,4 +107,5 @@ export interface ItemPatch {
   unit_price_minor?: number | null
   total_minor?: number
   split_equally?: boolean
+  split_count?: number | null
 }

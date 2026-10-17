@@ -68,7 +68,7 @@ def test_split_locks_when_every_item_is_claimed_and_confirmed(client, split):
     assert sum(s["total_minor"] for s in view["shares"]) == view["total_minor"]
 
 
-def test_shares_stay_hidden_until_everyone_has_confirmed(client, split):
+def test_the_split_is_not_locked_until_everyone_has_confirmed(client, split):
     body, ana, ben = split
     claim(client, body, item_id(client, body, "Salad"), 1, ana)
     claim(client, body, item_id(client, body, "Steak"), 2, ben)
@@ -77,8 +77,9 @@ def test_shares_stay_hidden_until_everyone_has_confirmed(client, split):
     view = get_view(client, body)
 
     assert view["locked"] is False
-    assert view["shares"] is None
     assert view["blockers"] == ["Ben has not confirmed."]
+    # Ana has confirmed, so her own share is already final.
+    assert [s["name"] for s in view["shares"]] == ["Ana"]
 
 
 def test_an_unclaimed_item_blocks_the_lock(client, split):
@@ -90,7 +91,8 @@ def test_an_unclaimed_item_blocks_the_lock(client, split):
     view = get_view(client, body)
 
     assert view["blockers"] == ["Salad has 1 unclaimed."]
-    assert view["shares"] is None
+    # The unclaimed salad blocks the lock, but each confirmed guest can still see what they owe.
+    assert {s["name"]: s["subtotal_minor"] for s in view["shares"]} == {"Ana": 0, "Ben": 3200}
 
 
 def test_the_host_claims_leftovers_by_joining_as_a_guest(client, split):
@@ -126,7 +128,8 @@ def test_an_over_claimed_item_blocks_the_lock(client, split):
         "Ana has not confirmed.",
         "Ben has not confirmed.",
     ]
-    assert view["shares"] is None
+    # The edit sent everyone back to confirm again, so nobody has a share yet.
+    assert view["shares"] == []
 
 
 def test_editing_the_bill_after_locking_unlocks_it(client, split):
@@ -165,7 +168,7 @@ def test_released_name_keeps_its_claims_and_rejoins_the_same_slot(client, split)
         {"member_id": ben["member_id"], "name": "Ben", "quantity": 2}
     ]
     assert view["blockers"] == ["Ben has claims but has not rejoined."]
-    assert view["shares"] is None
+    assert [s["name"] for s in view["shares"]] == ["Ana"]
     # The old token stops working.
     assert client.get(f"/sessions/{sid}/me", headers=member_headers(ben)).status_code == 403
 

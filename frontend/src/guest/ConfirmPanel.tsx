@@ -8,8 +8,8 @@ interface Props {
 }
 
 const TEXT: Record<Confirmation, string> = {
-  none: 'Check your items, then confirm them. You can change them until everyone has confirmed.',
-  confirmed: 'Confirmed. If you change an item, you will need to confirm again.',
+  none: 'Check your items, then confirm them. Your payment link appears as soon as you confirm. You do not need to wait for the others.',
+  confirmed: 'Confirmed. If you change an item, you will need to confirm again to pay.',
   needs_reconfirm: 'The bill changed after you confirmed. Check your items, then confirm again.',
 }
 

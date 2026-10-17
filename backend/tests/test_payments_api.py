@@ -89,7 +89,7 @@ def test_a_guest_can_take_their_mark_back(client, split):
     assert share_of(view, "Ana")["payment"] == "unpaid"
 
 
-def test_paying_needs_a_locked_split_but_unmarking_does_not(client, split):
+def test_paying_needs_your_own_confirmation_but_unmarking_does_not(client, split):
     body, ana, _ = split
     claim(client, body, item_id(client, body, "Salad"), 1, ana)
 
@@ -97,9 +97,49 @@ def test_paying_needs_a_locked_split_but_unmarking_does_not(client, split):
 
     assert resp.status_code == 409
     assert resp.json()["detail"] == (
-        "Shares are not final yet. Payments open once the split is locked."
+        "Confirm your items first. Your payment opens once you have confirmed."
     )
     assert mark_my_paid(client, body, ana, paid=False).status_code == 200
+
+
+def test_a_guest_can_pay_once_they_confirm_without_waiting_for_others(client, split):
+    body, ana, ben = split
+    claim(client, body, item_id(client, body, "Salad"), 1, ana)
+    confirm(client, body, ana)
+
+    view = get_view(client, body)
+
+    # Steak is unclaimed and Ben has not confirmed, so the split is not locked.
+    assert view["locked"] is False
+    assert [s["name"] for s in view["shares"]] == ["Ana"]
+    assert share_of(view, "Ana")["subtotal_minor"] == 1400
+    assert mark_my_paid(client, body, ana).status_code == 200
+
+
+def test_a_guests_amount_does_not_move_while_others_finish(client, split):
+    body, ana, ben = split
+    claim(client, body, item_id(client, body, "Salad"), 1, ana)
+    confirm(client, body, ana)
+    before = share_of(get_view(client, body), "Ana")
+    mark_my_paid(client, body, ana)
+
+    claim(client, body, item_id(client, body, "Steak"), 2, ben)
+    confirm(client, body, ben)
+
+    view = get_view(client, body)
+    assert view["locked"] is True
+    assert share_of(view, "Ana") == {**before, "payment": "paid"}
+
+
+def test_changing_a_claim_takes_the_payment_link_away_until_they_confirm_again(client, split):
+    body, ana, _ = split
+    salad = item_id(client, body, "Salad")
+    claim(client, body, salad, 1, ana)
+    confirm(client, body, ana)
+
+    claim(client, body, salad, 0, ana)
+
+    assert get_view(client, body)["shares"] == []
 
 
 def test_recording_a_payment_keeps_the_split_locked(client, split):
@@ -163,7 +203,9 @@ def test_an_unjoined_name_has_no_share_to_pay(client, split):
     resp = mark_member_paid(client, body, jack_slot)
 
     assert resp.status_code == 409
-    assert resp.json()["detail"] == "This name has not joined, so it has no share to pay."
+    assert resp.json()["detail"] == (
+        "Confirm your items first. Your payment opens once you have confirmed."
+    )
 
 
 # Payment handle and platform

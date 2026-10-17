@@ -412,3 +412,166 @@ def test_equal_split_blocks_locking_until_someone_joins_it(client, split):
 
     assert view["locked"] is False
     assert "Steak needs at least one person to split it." in view["blockers"]
+
+
+# Equal split with a set number of people
+
+def split_between(client, body, item_id, count):
+    resp = client.patch(
+        f"/sessions/{body['session_id']}/items/{item_id}",
+        json={"split_equally": True, "split_count": count},
+        headers=host(body),
+    )
+    assert resp.status_code == 200, resp.text
+    make_ready(client, body)
+    return resp
+
+
+def test_a_set_head_count_shows_the_free_spots(client, split):
+    body, ana, _ = split
+    steak = steak_id(client, body)
+    split_between(client, body, steak, 4)
+    assert item_of(get_view(client, body), "Steak")["remaining"] == 4
+
+    resp = claim(client, body, steak, 1, ana)
+
+    assert item_of(resp.json(), "Steak")["remaining"] == 3
+    assert item_of(resp.json(), "Steak")["split_count"] == 4
+
+
+def test_nobody_can_join_once_every_spot_is_taken(client, split):
+    body, ana, ben = split
+    steak = steak_id(client, body)
+    split_between(client, body, steak, 2)
+    jack = join(client, body, "Jack")
+    assert claim(client, body, steak, 1, ana).status_code == 200
+    assert claim(client, body, steak, 1, ben).status_code == 200
+
+    resp = claim(client, body, steak, 1, jack)
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "Steak already has all 2 people."
+    # Someone who is already in can repeat the call, and leaving frees the spot.
+    assert claim(client, body, steak, 1, ana).status_code == 200
+    assert claim(client, body, steak, 0, ben).status_code == 200
+    assert claim(client, body, steak, 1, jack).status_code == 200
+
+
+def test_each_person_pays_their_fixed_share_before_the_rest_have_joined(client, split):
+    body, ana, _ = split
+    steak = steak_id(client, body)
+    split_between(client, body, steak, 4)
+    claim(client, body, steak, 1, ana)
+    confirm(client, body, ana)
+
+    view = get_view(client, body)
+
+    # Steak is 32.00 between 4 people, so Ana owes 8.00 now and still will when the rest join.
+    assert {s["name"]: s["subtotal_minor"] for s in view["shares"]} == {"Ana": 800}
+    assert view["locked"] is False
+    assert "Steak is waiting for 3 more people to split it." in view["blockers"]
+
+
+def test_a_set_head_count_must_be_filled_to_lock(client, split):
+    body, ana, ben = split
+    steak = steak_id(client, body)
+    salad = item_of(get_view(client, body), "Salad")["id"]
+    split_between(client, body, steak, 2)
+    claim(client, body, salad, 1, ana)
+    claim(client, body, steak, 1, ana)
+    claim(client, body, steak, 1, ben)
+    confirm(client, body, ana)
+    confirm(client, body, ben)
+
+    view = get_view(client, body)
+
+    assert view["locked"] is True
+    assert {s["name"]: s["subtotal_minor"] for s in view["shares"]} == {"Ana": 3000, "Ben": 1600}
+
+
+def test_lowering_the_head_count_below_the_people_in_over_claims_the_item(client, split):
+    body, ana, ben = split
+    steak = steak_id(client, body)
+    split_between(client, body, steak, 3)
+    jack = join(client, body, "Jack")
+    for guest in (ana, ben, jack):
+        claim(client, body, steak, 1, guest)
+        confirm(client, body, guest)
+
+    split_between(client, body, steak, 2)
+    view = get_view(client, body)
+
+    assert item_of(view, "Steak")["remaining"] == -1
+    assert "Steak is over-claimed." in view["blockers"]
+    # The amounts changed, so everyone has to confirm again, and nobody can until it is fixed.
+    assert member_of(view, "Ana")["confirmation"] == "needs_reconfirm"
+    assert confirm(client, body, ana).status_code == 409
+    # One person leaving fixes it.
+    claim(client, body, steak, 0, jack)
+    assert confirm(client, body, ana).status_code == 200
+
+
+def test_clearing_the_head_count_goes_back_to_whoever_joins(client, split):
+    body, ana, _ = split
+    steak = steak_id(client, body)
+    split_between(client, body, steak, 3)
+    claim(client, body, steak, 1, ana)
+
+    client.patch(
+        f"/sessions/{body['session_id']}/items/{steak}",
+        json={"split_count": None},
+        headers=host(body),
+    )
+
+    view = item_of(get_view(client, body), "Steak")
+    assert view["split_count"] is None
+    assert view["split_equally"] is True
+    assert view["remaining"] == 0
+
+
+def test_a_head_count_needs_an_equal_split(client, split):
+    body, _, _ = split
+    steak = steak_id(client, body)
+
+    resp = client.patch(
+        f"/sessions/{body['session_id']}/items/{steak}",
+        json={"split_count": 3},
+        headers=host(body),
+    )
+
+    assert resp.status_code == 422
+    added = client.post(
+        f"/sessions/{body['session_id']}/items",
+        json={"name": "Tea", "total_minor": 300, "split_count": 3},
+        headers=host(body),
+    )
+    assert added.status_code == 422
+
+
+def test_turning_the_equal_split_off_drops_the_head_count(client, split):
+    body, _, _ = split
+    steak = steak_id(client, body)
+    split_between(client, body, steak, 3)
+
+    resp = client.patch(
+        f"/sessions/{body['session_id']}/items/{steak}",
+        json={"split_equally": False},
+        headers=host(body),
+    )
+
+    assert resp.status_code == 200
+    assert item_of(resp.json(), "Steak")["split_count"] is None
+    assert item_of(resp.json(), "Steak")["remaining"] == 2
+
+
+def test_a_head_count_is_at_least_two(client, split):
+    body, _, _ = split
+    steak = steak_id(client, body)
+
+    resp = client.patch(
+        f"/sessions/{body['session_id']}/items/{steak}",
+        json={"split_equally": True, "split_count": 1},
+        headers=host(body),
+    )
+
+    assert resp.status_code == 422

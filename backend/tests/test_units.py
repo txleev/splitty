@@ -55,6 +55,7 @@ def item(name="Tea", total=100, missing=(), quantity=1, split_equally=False):
         missing=list(missing),
         preassigned_names=[],
         split_equally=split_equally,
+        split_count=None,
         remaining=quantity,
         claims=[],
     )

@@ -38,26 +38,46 @@ def split_by(
     return parts
 
 
+# Stands in for whatever nobody has claimed yet. It is larger than any member id, so on a tie
+# the guests get the odd cent and the unclaimed part does not.
+UNCLAIMED = 2**62
+
+
 def compute_shares(
     *,
-    items: list[tuple[int, dict[int, int]]],
+    items: list[tuple],
     member_ids: list[int],
     tax_minor: int,
     tip_minor: int,
 ) -> dict[int, Share]:
-    """Each guest's share of a bill where every item is fully claimed.
+    """Each listed guest's share of the bill, whoever else has claimed so far.
 
-    `items` holds (line total, {member_id: claimed quantity}) pairs. A guest's part of a line is
-    their claimed quantity over the line's quantity, times the line total. Tax and tip are split
-    in proportion to each guest's subtotal.
+    `items` holds (line total, {member_id: claimed quantity}) pairs, with an optional third value:
+    the number of units on the line. With it, units nobody has claimed yet stay unclaimed instead
+    of being spread over the guests who did claim, so a guest's amount does not move while
+    others are still choosing. Without it the claims are taken to cover the whole line, as for an
+    equal split, where every claim has the same weight.
+
+    Tax and tip are split in proportion to each guest's subtotal, with the unclaimed part of the
+    bill counted too. When everything is claimed, the parts add up to the bill exactly.
     """
-    subtotal = {member_id: 0 for member_id in member_ids}
-    for line_total, claims in items:
-        for member_id, amount in split_by(line_total, claims).items():
-            subtotal[member_id] += amount
+    subtotal: dict[int, int] = {member_id: 0 for member_id in member_ids}
+    bill_subtotal = 0
+    for line_total, claims, *rest in items:
+        bill_subtotal += line_total
+        units = rest[0] if rest else None
+        weights = dict(claims)
+        if units is not None and units > sum(claims.values()):
+            weights[UNCLAIMED] = units - sum(claims.values())
+        if not weights:
+            continue
+        for key, amount in split_by(line_total, weights).items():
+            if key != UNCLAIMED:
+                subtotal[key] = subtotal.get(key, 0) + amount
 
-    tax = split_by(tax_minor, subtotal, fallback=member_ids)
-    tip = split_by(tip_minor, subtotal, fallback=member_ids)
+    unclaimed = max(bill_subtotal - sum(subtotal.values()), 0)
+    tax = split_by(tax_minor, {**subtotal, UNCLAIMED: unclaimed}, fallback=member_ids)
+    tip = split_by(tip_minor, {**subtotal, UNCLAIMED: unclaimed}, fallback=member_ids)
     return {
         member_id: Share(subtotal=subtotal[member_id], tax=tax[member_id], tip=tip[member_id])
         for member_id in member_ids

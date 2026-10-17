@@ -57,7 +57,7 @@ function ClaimRow({ item, currency, memberId, busy, onClaim }: Omit<Props, 'item
           <input
             type="checkbox"
             checked={own > 0}
-            disabled={busy}
+            disabled={busy || limit === 0}
             aria-label={`Split ${item.name} equally`}
             onChange={(event) => onClaim(item.id, event.target.checked ? 1 : 0)}
           />
@@ -95,6 +95,13 @@ function ClaimRow({ item, currency, memberId, busy, onClaim }: Omit<Props, 'item
 function ClaimStatus({ item }: { item: Item }) {
   if (item.split_equally) {
     const count = item.claims.length
+    if (item.split_count !== null) {
+      return (
+        <Pill tone={count >= item.split_count ? 'ok' : 'warn'}>
+          Split between {item.split_count} · {count} in
+        </Pill>
+      )
+    }
     if (count === 0) {
       return <Pill tone="warn">Split equally · nobody in yet</Pill>
     }

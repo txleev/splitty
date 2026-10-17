@@ -88,6 +88,7 @@ function ItemRow({ item, currency, busy, onSave, onDelete }: RowProps) {
     }
     if (input.total_minor !== item.total_minor) patch.total_minor = input.total_minor
     if (input.split_equally !== item.split_equally) patch.split_equally = input.split_equally
+    if (input.split_count !== item.split_count) patch.split_count = input.split_count
 
     const saved = Object.keys(patch).length === 0 || (await onSave(patch))
     if (saved) {
@@ -106,6 +107,7 @@ function ItemRow({ item, currency, busy, onSave, onDelete }: RowProps) {
             unitPrice: toInputValue(item.unit_price_minor),
             total: toInputValue(item.total_minor),
             splitEqually: item.split_equally,
+            splitCount: item.split_count === null ? '' : String(item.split_count),
           }}
           submitLabel="Save"
           busy={busy}
@@ -126,7 +128,11 @@ function ItemRow({ item, currency, busy, onSave, onDelete }: RowProps) {
         <p className="muted small">
           {[
             `Quantity ${formatQuantity(item.quantity)}`,
-            item.split_equally ? 'Split equally' : null,
+            item.split_equally
+            ? item.split_count === null
+              ? 'Split equally'
+              : `Split equally between ${item.split_count}`
+            : null,
             item.unit_price_minor !== null ? `${formatAmount(item.unit_price_minor)} each` : null,
           ]
             .filter(Boolean)
@@ -164,7 +170,11 @@ function ClaimSummary({ item }: { item: Item }) {
       <span className="muted">{who || 'Nobody has claimed it yet.'}</span>
       {item.remaining > 0 && (
         <Pill tone="warn">
-          {item.split_equally ? 'Nobody in yet' : `${formatQuantity(item.remaining)} unclaimed`}
+          {item.split_equally
+            ? item.split_count === null
+              ? 'Nobody in yet'
+              : `${formatQuantity(item.remaining)} spots free`
+            : `${formatQuantity(item.remaining)} unclaimed`}
         </Pill>
       )}
       {item.remaining < 0 && (
@@ -246,9 +256,25 @@ function ItemForm({ initial, submitLabel, busy, resetOnSuccess = false, onSubmit
         />
         <span>
           Split equally
-          <span className="muted small"> Everyone who joins pays the same share. Changing this clears the item's claims.</span>
+          <span className="muted small"> Everyone who joins pays the same share. Turning this on or off clears the item's claims.</span>
         </span>
       </label>
+      {values.splitEqually && (
+        <label className="field">
+          <span>Number of people to split between</span>
+          <input
+            inputMode="numeric"
+            value={values.splitCount}
+            onChange={field('splitCount')}
+            placeholder="optional, e.g. 4"
+            disabled={busy}
+          />
+          <span className="muted small">
+            Everyone pays total ÷ this number, even before all of them have joined. Leave it empty if
+            you don't know yet: then it is split between whoever joins.
+          </span>
+        </label>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="row">
         <button type="submit" className="btn btn-primary" disabled={busy}>

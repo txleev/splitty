@@ -13,6 +13,7 @@ function item(overrides: Partial<Item>): Item {
     missing: [],
     preassigned_names: [],
     split_equally: false,
+    split_count: null,
     remaining: 1,
     claims: [],
     ...overrides,
@@ -104,5 +105,34 @@ describe('equal split', () => {
       { member_id: 9, name: 'Cy', quantity: 1 },
     ])
     expect(estimateSubtotal([shared], ANA)).toBe(333)
+  })
+})
+
+describe('equal split with a set head count', () => {
+  const cake = (claims: Item['claims'], count = 4) =>
+    item({
+      name: 'Cake',
+      total_minor: 1200,
+      split_equally: true,
+      split_count: count,
+      remaining: count - claims.length,
+      claims,
+    })
+  const people = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ member_id: 100 + i, name: `P${i}`, quantity: 1 }))
+
+  it('charges total over the head count before everyone has joined', () => {
+    const shared = cake([{ member_id: ANA, name: 'Ana', quantity: 1 }])
+    expect(estimateSubtotal([shared], ANA)).toBe(300)
+  })
+
+  it('lets a guest join only while a spot is free', () => {
+    expect(maxClaim(cake(people(3)), ANA)).toBe(1)
+    expect(maxClaim(cake(people(4)), ANA)).toBe(0)
+  })
+
+  it('keeps the spot of a guest who is already in', () => {
+    const full = cake([{ member_id: ANA, name: 'Ana', quantity: 1 }, ...people(3)])
+    expect(maxClaim(full, ANA)).toBe(1)
   })
 })

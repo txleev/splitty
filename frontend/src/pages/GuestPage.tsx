@@ -37,7 +37,7 @@ function GuestView({ sessionId }: { sessionId: string }) {
   }
 
   const myMember = seat ? session.members.find((m) => m.id === seat.memberId && m.joined) : undefined
-  // Shares exist only once the split is locked, so the pay panel appears only then.
+  // A share exists once this guest has confirmed. It does not wait for anyone else.
   const myShare = myMember
     ? session.shares?.find((share) => share.member_id === myMember.id)
     : undefined
@@ -128,7 +128,7 @@ function GuestView({ sessionId }: { sessionId: string }) {
             />
             <p className="muted small">
               About {formatMoney(estimateSubtotal(session.items, myMember.id), session.currency)}{' '}
-              before tax and tip. The final amounts appear once everyone has confirmed.
+              before tax and tip. Your final amount and payment link appear once you confirm.
             </p>
           </section>
           <ConfirmPanel
@@ -159,21 +159,15 @@ function GuestView({ sessionId }: { sessionId: string }) {
         </>
       )}
 
+      {myShare && (
+        <PayPanel session={session} share={myShare} applySession={applySession} markPaid={markPaid} />
+      )}
+
       {session.locked && session.shares ? (
-        <>
-          {myShare && (
-            <PayPanel
-              session={session}
-              share={myShare}
-              applySession={applySession}
-              markPaid={markPaid}
-            />
-          )}
-          <section className="card stack">
-            <h2>Who pays what</h2>
-            <SharesTable shares={session.shares} currency={session.currency} mineId={myMember?.id} />
-          </section>
-        </>
+        <section className="card stack">
+          <h2>Who pays what</h2>
+          <SharesTable shares={session.shares} currency={session.currency} mineId={myMember?.id} />
+        </section>
       ) : (
         <section className="card stack">
           <h2>Still open</h2>

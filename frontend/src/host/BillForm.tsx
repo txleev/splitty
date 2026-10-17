@@ -20,7 +20,9 @@ export function BillForm({ session, hostToken, applySession }: Props) {
   const [tip, setTip] = useState(toInputValue(session.tip_minor))
   const [total, setTotal] = useState(toInputValue(session.total_minor))
   const [handle, setHandle] = useState(session.host_payment_handle ?? '')
-  const [platform, setPlatform] = useState<PaymentPlatform | null>(session.host_payment_platform)
+  const [platform, setPlatform] = useState<PaymentPlatform | null>(
+    session.host_payment_platform ?? 'wise',
+  )
   const [inputError, setInputError] = useState<string | null>(null)
   const action = useAction(applySession)
 

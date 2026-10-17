@@ -24,7 +24,7 @@ Base URL in the compose stack: `http://127.0.0.1:8001`.
 | GET    | `/sessions/{id}/me`                    | guest     | —                                 | Who this token belongs to, and its confirmation state. |
 | PUT    | `/sessions/{id}/items/{item_id}/claim` | guest     | `quantity` (whole number, 0 removes) | Sets this guest's total for the item. Safe to repeat. |
 | POST   | `/sessions/{id}/confirm`               | guest     | —                                 | Confirms current claims. Always allowed to repeat. |
-| PUT    | `/sessions/{id}/me/paid`               | guest     | `paid` (bool)                     | Marks this guest's share as paid, or unmarks it. Marking needs a locked split. |
+| PUT    | `/sessions/{id}/me/paid`               | guest     | `paid` (bool)                     | Marks this guest's share as paid, or unmarks it. Marking needs this guest to have confirmed. |
 | PUT    | `/sessions/{id}/members/{member_id}/paid` | host   | `paid` (bool)                     | Same, for any joined guest, for example a cash payment. |
 | WS     | `/ws/sessions/{id}`                    | anyone    | —                                 | Live view. Sends a snapshot on connect and after every change. |
 
@@ -39,10 +39,10 @@ Base URL in the compose stack: `http://127.0.0.1:8001`.
 - Host actions send the token in the `X-Host-Token` header. Guest actions send `X-Member-Token`.
 - Claims stay attached to their item when the host edits it. If a quantity drops below what guests claimed, the item is over-claimed (`remaining` < 0). Affected guests can't confirm until they lower their claims.
 - A confirmation becomes `needs_reconfirm` when the amounts change after the guest confirmed. Changing a claim clears the confirmation.
-- An item with `split_equally: true` is claimed with `quantity` 1 (join) or 0 (leave). Everyone who joined pays an equal share of the line total, and it counts as claimed once one guest is in. Changing the flag deletes that item's claims.
+- An item with `split_equally: true` is claimed with `quantity` 1 (join) or 0 (leave). An optional `split_count` (2 to 100) fixes how many people share it: each pays total ÷ count even before all have joined, joining stops when every spot is taken, and the item locks only when all spots are filled. Without it, whoever joins splits the line. Everyone who joined pays an equal share of the line total, and it counts as claimed once one guest is in. Changing the flag deletes that item's claims.
 - A split locks when every item is fully claimed, every joined guest has confirmed the current bill, and the bill adds up. `blockers` lists what is still missing.
-- `shares` holds each joined guest's exact amounts, but only while the split is locked. Before that it is `null`.
-- A guest's part of a line is their claimed quantity over the line quantity, times the line total. Tax and tip follow each guest's subtotal. The shares always add up to the total. Rounding goes to the largest remainders, and ties go to the earlier joiner.
+- `shares` holds the exact amounts of each joined guest who has confirmed the current bill. A guest does not wait for the others: their share appears, and they can pay, as soon as they confirm. It is `null` while the bill is a draft or does not add up. `locked` still means everything is claimed and everyone has confirmed.
+- A guest's part of a line is their claimed quantity over the line quantity, times the line total. Units nobody has claimed yet stay unclaimed instead of raising the other guests' parts. Tax and tip follow each guest's subtotal against the whole bill, so a guest's amount does not move while others choose (an equal split still moves as people join, and the guest sees "changed" if they had paid). Once everything is claimed the shares add up to the total. Rounding goes to the largest remainders, and ties go to the earlier joiner.
 - Releasing a name is for guests who lost their browser. The old token stops working, the claims stay, and rejoining with the same name takes the same slot back.
 - Payments: each share has a `payment` of `unpaid`, `paid` or `changed`. Marking a share paid stores the exact amount owed at that moment. If the share moves later, the status becomes `changed` until the guest pays and marks it again. Payments do not affect locking.
 - The payment handle is a username or tag with no spaces, slashes or links. It is stored with its platform, `revolut` or `wise`.
@@ -74,7 +74,7 @@ python -m venv .venv
 - `sessions.py`: all session logic (create, edit, ready check, join) and the expiry rule.
 - `ocr_client.py`: calls `ocr-mvp /parse`.
 - `schemas.py`: request and response models.
-- `shares.py`: splits a locked bill into each guest's share, with exact rounding.
+- `shares.py`: splits a bill into each guest's share, with exact rounding.
 - `live.py`: the WebSocket endpoint, which listens for changes and pushes snapshots.
 - `money.py`, `ids.py`, `errors.py`: minor units, IDs and token hashing, and the error type.
 - `db.py`, `migrations/`: connection and SQL migrations, applied in order at startup.

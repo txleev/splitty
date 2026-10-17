@@ -107,3 +107,56 @@ def test_random_bills_always_add_up_to_the_total():
         assert sum(s.tax for s in shares.values()) == tax
         assert sum(s.tip for s in shares.values()) == tip
         assert sum(s.total for s in shares.values()) == subtotal + tax + tip
+
+
+def test_unclaimed_units_do_not_raise_a_guests_share():
+    # Two steaks at 16.00 each. Ana took one, and the other is still free.
+    shares = compute_shares(
+        items=[(3200, {1: 1}, 2)], member_ids=[1], tax_minor=0, tip_minor=0
+    )
+
+    assert shares[1].subtotal == 1600
+
+
+def test_tax_and_tip_follow_the_whole_bill_not_only_the_claimed_part():
+    # Ana has 1000 of a 4000 bill. She pays a quarter of the 400 tax and 200 tip.
+    shares = compute_shares(
+        items=[(1000, {1: 1}, 1), (3000, {}, 1)],
+        member_ids=[1],
+        tax_minor=400,
+        tip_minor=200,
+    )
+
+    assert (shares[1].subtotal, shares[1].tax, shares[1].tip) == (1000, 100, 50)
+
+
+def test_a_guest_amount_is_the_same_before_and_after_the_others_claim():
+    alone = compute_shares(
+        items=[(1000, {1: 1}, 1), (3000, {}, 3)],
+        member_ids=[1],
+        tax_minor=400,
+        tip_minor=0,
+    )
+    everyone = compute_shares(
+        items=[(1000, {1: 1}, 1), (3000, {2: 3}, 3)],
+        member_ids=[1, 2],
+        tax_minor=400,
+        tip_minor=0,
+    )
+
+    assert alone[1] == everyone[1]
+    assert everyone[1].total + everyone[2].total == 4400
+
+
+def test_claims_from_a_name_that_is_not_listed_still_take_their_part():
+    shares = compute_shares(
+        items=[(3000, {1: 1, 2: 2}, 3)], member_ids=[1], tax_minor=0, tip_minor=0
+    )
+
+    assert shares[1].subtotal == 1000
+
+
+def test_an_equal_split_with_nobody_in_charges_nobody():
+    shares = compute_shares(items=[(900, {})], member_ids=[1], tax_minor=0, tip_minor=0)
+
+    assert shares[1].subtotal == 0
