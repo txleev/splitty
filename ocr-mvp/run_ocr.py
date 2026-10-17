@@ -3,20 +3,13 @@ import sys
 from pathlib import Path
 from time import perf_counter
 
-from paddleocr import PaddleOCR
+from ocr_core import build_ocr
 
 input_path = sys.argv[1]
 output_dir = Path(__file__).resolve().parent / "output"
 output_dir.mkdir(parents=True, exist_ok=True)
 
-ocr = PaddleOCR(
-    device="cpu",
-    text_detection_model_name="PP-OCRv6_small_det",
-    text_recognition_model_name="PP-OCRv6_small_rec",
-    use_doc_orientation_classify=False,
-    use_doc_unwarping=False,
-    use_textline_orientation=False,
-)
+ocr = build_ocr()
 
 # Repeat in the same process to separate startup from warm inference.
 for run in range(2):
