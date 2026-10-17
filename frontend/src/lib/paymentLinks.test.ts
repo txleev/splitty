@@ -5,7 +5,18 @@ describe('paymentLink', () => {
   it('builds a Revolut link with the exact amount and currency', () => {
     expect(
       paymentLink({ platform: 'revolut', handle: 'ana.k', currency: 'EUR', amountMinor: 1507 }),
-    ).toBe('https://revolut.me/ana.k?amount=15.07&currency=EUR')
+    ).toBe('https://revolut.me/ana.k?amount=1507&currency=EUR')
+  })
+
+  it('sends Revolut the amount in minor units, so 182.91 USD is not shown as 1.82', () => {
+    expect(
+      paymentLink({
+        platform: 'revolut',
+        handle: 'metharasansilunid',
+        currency: 'USD',
+        amountMinor: 18291,
+      }),
+    ).toBe('https://revolut.me/metharasansilunid?amount=18291&currency=USD')
   })
 
   it('builds a Wise link', () => {
@@ -17,7 +28,13 @@ describe('paymentLink', () => {
   it('accepts USD written in lower case', () => {
     expect(
       paymentLink({ platform: 'revolut', handle: 'ana', currency: 'usd', amountMinor: 1000 }),
-    ).toBe('https://revolut.me/ana?amount=10.00&currency=USD')
+    ).toBe('https://revolut.me/ana?amount=1000&currency=USD')
+  })
+
+  it('reads "Ft" from a receipt as HUF', () => {
+    expect(
+      paymentLink({ platform: 'revolut', handle: 'txleev', currency: 'Ft', amountMinor: 167700 }),
+    ).toBe('https://revolut.me/txleev?amount=167700&currency=HUF')
   })
 
   it('offers no link in any other currency', () => {
@@ -46,6 +63,6 @@ describe('paymentLink', () => {
     const url = new URL(link ?? '')
     expect(url.origin).toBe('https://revolut.me')
     expect(url.pathname).toBe('/a%2Fb%3Fx%3D1%23')
-    expect(url.searchParams.get('amount')).toBe('5.00')
+    expect(url.searchParams.get('amount')).toBe('500')
   })
 })

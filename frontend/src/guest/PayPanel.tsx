@@ -3,7 +3,7 @@ import type { Payment, Session, Share } from '../api/types'
 import { PlatformMark } from '../components/PlatformMark'
 import { ErrorNotice, Notice, type Tone } from '../components/ui'
 import { formatMoney, toInputValue } from '../lib/money'
-import { PLATFORM_LABEL, paymentLink } from '../lib/paymentLinks'
+import { LINK_CURRENCY_TEXT, PLATFORM_LABEL, paymentLink } from '../lib/paymentLinks'
 import { useAction } from '../lib/useAction'
 
 interface Props {
@@ -27,7 +27,7 @@ function noLinkText(session: Session, amount: string): string {
   if (!session.host_payment_handle || !session.host_payment_platform) {
     return `The host has not added a payment handle. Pay ${amount} directly, then mark it paid here.`
   }
-  return `Payment links work in EUR, GBP and USD. Pay ${amount} directly, then mark it paid here.`
+  return `Payment links work in ${LINK_CURRENCY_TEXT}. Pay ${amount} directly, then mark it paid here.`
 }
 
 /** What one guest owes, the way to pay it, and their own paid mark. */

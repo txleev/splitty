@@ -57,7 +57,7 @@ describe('PayPanel', () => {
     renderPanel(sessionWith(), 'unpaid')
 
     const link = screen.getByRole('link', { name: 'Pay 34.43 EUR with Revolut' })
-    expect(link.getAttribute('href')).toBe('https://revolut.me/ana.k?amount=34.43&currency=EUR')
+    expect(link.getAttribute('href')).toBe('https://revolut.me/ana.k?amount=3443&currency=EUR')
   })
 
   it('records the payment when the guest says they have paid', async () => {
@@ -90,10 +90,17 @@ describe('PayPanel', () => {
     expect(screen.getByText(/has not added a payment handle/)).toBeTruthy()
   })
 
-  it('offers no app link outside EUR, GBP and USD', () => {
+  it('shows the link for a split in forint, which receipts write as Ft', () => {
+    renderPanel(sessionWith({ currency: 'Ft' }), 'unpaid')
+
+    const link = screen.getByRole('link', { name: 'Pay 34.43 Ft with Revolut' })
+    expect(link.getAttribute('href')).toBe('https://revolut.me/ana.k?amount=3443&currency=HUF')
+  })
+
+  it('offers no app link outside the supported currencies', () => {
     renderPanel(sessionWith({ currency: 'KGS' }), 'unpaid')
 
     expect(screen.queryByRole('link')).toBeNull()
-    expect(screen.getByText(/Payment links work in EUR, GBP and USD/)).toBeTruthy()
+    expect(screen.getByText(/Payment links work in EUR, GBP, USD and HUF/)).toBeTruthy()
   })
 })
