@@ -58,6 +58,7 @@ Rules:
 - An item line has the form "name | amount | tax code", or "name | qty | price | tax code". The amount on the item's own line is total_price, and it must be filled whenever such an amount is present.
 - If the line ends with "qty=N unit_price=P", use N as qty and P as unit_price. Do not look for another quantity.
 - If a priced line has no quantity and no qty= marker, use qty 1 and unit_price equal to total_price.
+- Weighted items sold by mass or volume (kg, g, lbs, L), for example "0.450 kg * 2000 Ft/kg = 900 Ft": set qty to 1.0, set unit_price and total_price to the final line total (900.0), and append the weight or rate to the item name, for example "Bananas (0.450 kg)". This applies even when the line has a qty= marker.
 - If an item's qty, unit_price or total_price is not clearly on the receipt, set that field to 0 and list it in that item's "missing" array (for example ["qty", "unit_price"]). Do not guess a value to fill it. Use an empty "missing" array when all fields were found.
 - If something is unclear or you had to guess, describe it in "warnings" instead of guessing silently.
 """
