@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+input/
+output/
+models/
+.env
+*.jpg
+*.jpeg
+*.png
+*.json
