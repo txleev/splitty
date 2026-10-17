@@ -24,6 +24,24 @@ Receipt OCR service. It runs PaddleOCR on a receipt image and, through Groq, tur
    The first start downloads the PaddleOCR models into `./models`. This can take a few minutes.
    The service refuses to start if `GROQ_API_KEY` is empty.
 
+## Database (PostgreSQL)
+
+No configuration is needed. The defaults are user `splitty`, password `splitty`, database `splitty`, port `5432`.
+
+```bash
+docker compose up -d db                              # start only the database
+docker compose exec db psql -U splitty -d splitty    # open a psql shell
+```
+
+Connection string for app code running on the host:
+
+```
+postgresql://splitty:splitty@localhost:5432/splitty
+```
+
+The port is bound to `127.0.0.1`, so other machines cannot connect. Data lives in the Docker volume `pgdata`
+and survives `docker compose down` and restarts. To wipe it, run `docker compose down -v`. This also stops the OCR service.
+
 ## Examples
 
 ```bash

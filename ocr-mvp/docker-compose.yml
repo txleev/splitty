@@ -48,3 +48,50 @@ services:
       timeout: 5s
       start_period: 300s
       retries: 3
+
+  # PostgreSQL for the bill rooms. Start it alone with: docker compose up -d db
+  db:
+    # Pinned to 17: PostgreSQL 18+ changed the data directory layout used below.
+    image: postgres:17
+    container_name: splitty-db
+    restart: unless-stopped
+    # Defaults work out of the box. Override them in .env if you want different values.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-splitty}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-splitty}
+      POSTGRES_DB: ${POSTGRES_DB:-splitty}
+    # Bound to localhost only, so the database is not reachable from other machines.
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # A named volume is managed by Docker, so there are no host file permissions to fix.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Room API: turns receipts into sessions. It does not wait for OCR to start, so it comes up fast.
+  backend:
+    build: ../backend
+    container_name: splitty-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-splitty}:${POSTGRES_PASSWORD:-splitty}@db:5432/${POSTGRES_DB:-splitty}
+      OCR_URL: http://ocr:8000
+    # Localhost only until auth and rate limiting exist (Phase 8).
+    ports:
+      - "127.0.0.1:8001:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  # Data survives `docker compose down`. Only `docker compose down -v` deletes it.
+  pgdata:
