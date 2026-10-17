@@ -4,6 +4,11 @@ export type Confirmation = 'none' | 'confirmed' | 'needs_reconfirm'
 
 export type SessionStatus = 'draft' | 'ready'
 
+export type PaymentPlatform = 'revolut' | 'wise'
+
+// "changed": the guest marked an earlier amount, and their share has moved since.
+export type Payment = 'unpaid' | 'paid' | 'changed'
+
 export interface Claim {
   member_id: number
   name: string
@@ -38,6 +43,7 @@ export interface Share {
   tax_minor: number
   tip_minor: number
   total_minor: number
+  payment: Payment
 }
 
 export interface Session {
@@ -51,6 +57,7 @@ export interface Session {
   total_minor: number | null
   warnings: string[]
   host_payment_handle: string | null
+  host_payment_platform: PaymentPlatform | null
   items: Item[]
   members: Member[]
   problems: string[]
@@ -76,6 +83,7 @@ export interface BillPatch {
   tip_minor?: number | null
   total_minor?: number | null
   host_payment_handle?: string | null
+  host_payment_platform?: PaymentPlatform | null
 }
 
 export interface ItemInput {

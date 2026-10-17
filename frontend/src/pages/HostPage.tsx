@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
+import { GuestQrCode } from '../components/GuestQrCode'
 import { SessionGone } from '../components/SessionGone'
 import { LiveBadge, Notice, Pill } from '../components/ui'
 import { BillForm } from '../host/BillForm'
 import { FinishCard } from '../host/FinishCard'
 import { GuestsPanel } from '../host/GuestsPanel'
 import { ItemEditor } from '../host/ItemEditor'
+import { PaymentsPanel } from '../host/PaymentsPanel'
 import type { Session } from '../api/types'
 import { loadHostToken } from '../lib/storage'
 import { useLiveSession } from '../lib/useLiveSession'
@@ -68,6 +70,7 @@ function HostView({ sessionId }: { sessionId: string }) {
           <CopyButton text={guestUrl} />
           <Link to={`/s/${session.session_id}`}>Open the guest page</Link>
         </div>
+        <GuestQrCode value={guestUrl} />
       </section>
 
       {session.warnings.length > 0 && (
@@ -90,6 +93,15 @@ function HostView({ sessionId }: { sessionId: string }) {
       <ItemEditor session={session} hostToken={hostToken} applySession={applySession} />
       <GuestsPanel session={session} hostToken={hostToken} applySession={applySession} />
       <FinishCard session={session} hostToken={hostToken} applySession={applySession} />
+      {session.locked && session.shares && (
+        <PaymentsPanel
+          sessionId={session.session_id}
+          currency={session.currency}
+          shares={session.shares}
+          hostToken={hostToken}
+          applySession={applySession}
+        />
+      )}
     </>
   )
 }
@@ -103,6 +115,7 @@ function billKey(session: Session): string {
     session.tip_minor,
     session.total_minor,
     session.host_payment_handle,
+    session.host_payment_platform,
   ])
 }
 

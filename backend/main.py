@@ -18,6 +18,7 @@ from schemas import (
     JoinOut,
     MeOut,
     MemberIn,
+    PaidIn,
     ParsedReceipt,
     SessionCreated,
     SessionPatch,
@@ -206,6 +207,27 @@ def post_confirm(
     conn=Depends(get_conn),
 ):
     return rooms.confirm(conn, session_id, x_member_token)
+
+
+@app.put("/sessions/{session_id}/me/paid", response_model=SessionView)
+def put_my_paid(
+    session_id: str,
+    body: PaidIn,
+    x_member_token: str | None = Header(default=None),
+    conn=Depends(get_conn),
+):
+    return rooms.set_my_paid(conn, session_id, x_member_token, body.paid)
+
+
+@app.put("/sessions/{session_id}/members/{member_id}/paid", response_model=SessionView)
+def put_member_paid(
+    session_id: str,
+    member_id: int,
+    body: PaidIn,
+    x_host_token: str | None = Header(default=None),
+    conn=Depends(get_conn),
+):
+    return rooms.set_member_paid(conn, session_id, x_host_token, member_id, body.paid)
 
 
 @app.websocket("/ws/sessions/{session_id}")

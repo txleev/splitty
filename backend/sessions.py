@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 
 import psycopg
@@ -16,6 +17,7 @@ from schemas import (
     JoinOut,
     MeOut,
     MemberOut,
+    Payment,
     ParsedReceipt,
     SessionCreated,
     SessionView,
@@ -29,10 +31,15 @@ SESSION_IDLE_TTL = timedelta(days=7)
 NOT_FOUND = "This split does not exist or has expired."
 NOT_READY = "The split is not ready yet. Ask the host to finish it."
 NAME_TAKEN = "That name has already joined. Pick a different name."
+NOT_FINAL = "Shares are not final yet. Payments open once the split is locked."
 
 # Changing one of these can break the totals check, so the split goes back to draft.
 BILL_FIELDS = {"currency", "subtotal_minor", "tax_minor", "tip_minor", "total_minor"}
-SESSION_FIELDS = BILL_FIELDS | {"host_payment_handle"}
+PAYMENT_FIELDS = {"host_payment_handle", "host_payment_platform"}
+SESSION_FIELDS = BILL_FIELDS | PAYMENT_FIELDS
+# A payment handle is a username or tag. Links, spaces and slashes are refused, so the payment
+# link built from it always goes where the host meant.
+HANDLE_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 NON_EMPTY_ITEM_FIELDS = {"name", "quantity", "total_minor"}
 # Renaming an item does not change what anyone owes. Every other item field does.
 NAME_ONLY = {"name"}
@@ -148,11 +155,19 @@ def find_blockers(
     return blockers
 
 
+def _payment(paid_minor: int | None, owed_minor: int) -> Payment:
+    """Paid only counts for the amount marked. A share that has moved needs paying again."""
+    if paid_minor is None:
+        return "unpaid"
+    return "paid" if paid_minor == owed_minor else "changed"
+
+
 def _shares_out(
     items: list[ItemOut],
     members: list[MemberOut],
     tax_minor: int | None,
     tip_minor: int | None,
+    paid_minor: dict[int, int | None],
 ) -> list[ShareOut]:
     joined = [m for m in members if m.joined]
     shares = compute_shares(
@@ -169,6 +184,7 @@ def _shares_out(
             tax_minor=shares[m.id].tax,
             tip_minor=shares[m.id].tip,
             total_minor=shares[m.id].total,
+            payment=_payment(paid_minor.get(m.id), shares[m.id].total),
         )
         for m in joined
     ]
@@ -179,7 +195,7 @@ def _read_view(conn: psycopg.Connection, session_id: str) -> SessionView:
         conn,
         """
         select status, last_active_at, bill_version, currency, subtotal_minor, tax_minor,
-               tip_minor, total_minor, warnings, host_payment_handle
+               tip_minor, total_minor, warnings, host_payment_handle, host_payment_platform
         from sessions where id = %s
         """,
         (session_id,),
@@ -226,6 +242,12 @@ def _read_view(conn: psycopg.Connection, session_id: str) -> SessionView:
             )
         )
 
+    member_rows = _rows(
+        conn,
+        "select id, name, token_hash is not null as joined, confirmed_bill_version, "
+        "paid_amount_minor from members where session_id = %s order by id",
+        (session_id,),
+    )
     members = [
         MemberOut(
             id=r["id"],
@@ -233,13 +255,9 @@ def _read_view(conn: psycopg.Connection, session_id: str) -> SessionView:
             joined=r["joined"],
             confirmation=_confirmation(r["confirmed_bill_version"], head["bill_version"]),
         )
-        for r in _rows(
-            conn,
-            "select id, name, token_hash is not null as joined, confirmed_bill_version "
-            "from members where session_id = %s order by id",
-            (session_id,),
-        )
+        for r in member_rows
     ]
+    paid_minor = {r["id"]: r["paid_amount_minor"] for r in member_rows}
 
     problems = find_problems(
         items=items,
@@ -263,13 +281,14 @@ def _read_view(conn: psycopg.Connection, session_id: str) -> SessionView:
         total_minor=head["total_minor"],
         warnings=head["warnings"],
         host_payment_handle=head["host_payment_handle"],
+        host_payment_platform=head["host_payment_platform"],
         items=items,
         members=members,
         problems=problems,
         locked=not blockers,
         blockers=blockers,
         shares=(
-            _shares_out(items, members, head["tax_minor"], head["tip_minor"])
+            _shares_out(items, members, head["tax_minor"], head["tip_minor"], paid_minor)
             if not blockers
             else None
         ),
@@ -411,16 +430,40 @@ def check_alive(conn: psycopg.Connection, session_id: str) -> None:
         _select_active(conn, session_id)
 
 
+def _payment_changes(conn: psycopg.Connection, session_id: str, changes: dict) -> dict:
+    """Check the payment handle and platform together, and return the values to store.
+
+    A handle needs a platform. Clearing the handle clears the platform too, so they never disagree.
+    """
+    current = _row(
+        conn,
+        "select host_payment_handle, host_payment_platform from sessions where id = %s",
+        (session_id,),
+    )
+    handle = clean_text(changes.get("host_payment_handle", current["host_payment_handle"]) or "")
+    if handle.startswith("@"):
+        handle = handle[1:]
+    if not handle:
+        return {"host_payment_handle": None, "host_payment_platform": None}
+    if not HANDLE_PATTERN.fullmatch(handle):
+        raise ApiError(422, "Enter the username or tag only, with no spaces, slashes or links.")
+    platform = changes.get("host_payment_platform", current["host_payment_platform"])
+    if platform is None:
+        raise ApiError(422, "Choose Revolut or Wise for this handle.")
+    return {"host_payment_handle": handle, "host_payment_platform": platform}
+
+
 def update_session(
     conn: psycopg.Connection, session_id: str, host_token: str | None, changes: dict
 ) -> SessionView:
     changes = dict(changes)
-    for field in ("currency", "host_payment_handle"):
-        if field in changes:
-            changes[field] = clean_text(changes[field] or "") or None
+    if "currency" in changes:
+        changes["currency"] = clean_text(changes["currency"] or "") or None
 
     with conn.transaction():
         _require_host(conn, session_id, host_token)
+        if PAYMENT_FIELDS & changes.keys():
+            changes.update(_payment_changes(conn, session_id, changes))
         if changes:
             assert set(changes) <= SESSION_FIELDS
             assignments = sql.SQL(", ").join(
@@ -775,3 +818,44 @@ def confirm(conn: psycopg.Connection, session_id: str, member_token: str | None)
             (bill_version, member["id"]),
         )
         return _read_view(conn, session_id)
+
+
+def set_my_paid(
+    conn: psycopg.Connection, session_id: str, member_token: str | None, paid: bool
+) -> SessionView:
+    """A guest marks their own share as paid, or takes the mark back."""
+    with conn.transaction():
+        member = _require_member(conn, session_id, member_token)
+        return _set_paid(conn, session_id, member["id"], paid)
+
+
+def set_member_paid(
+    conn: psycopg.Connection, session_id: str, host_token: str | None, member_id: int, paid: bool
+) -> SessionView:
+    """The host marks any guest's share as paid, for example when they paid in cash."""
+    with conn.transaction():
+        _require_host(conn, session_id, host_token)
+        _host_member(conn, session_id, member_id)
+        return _set_paid(conn, session_id, member_id, paid)
+
+
+def _set_paid(conn: psycopg.Connection, session_id: str, member_id: int, paid: bool) -> SessionView:
+    if not paid:
+        conn.execute(
+            "update members set paid_amount_minor = null, paid_at = null where id = %s",
+            (member_id,),
+        )
+        return _read_view(conn, session_id)
+
+    view = _read_view(conn, session_id)
+    if view.blockers:
+        raise ApiError(409, NOT_FINAL)
+    share = next((s for s in view.shares if s.member_id == member_id), None)
+    if share is None:
+        raise ApiError(409, "This name has not joined, so it has no share to pay.")
+    # Record the exact amount owed right now. A later change to the share shows as "changed".
+    conn.execute(
+        "update members set paid_amount_minor = %s, paid_at = now() where id = %s",
+        (share.total_minor, member_id),
+    )
+    return _read_view(conn, session_id)

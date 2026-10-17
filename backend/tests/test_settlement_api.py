@@ -53,6 +53,7 @@ def test_split_locks_when_every_item_is_claimed_and_confirmed(client, split):
             "tax_minor": 107,
             "tip_minor": 0,
             "total_minor": 1507,
+            "payment": "unpaid",
         },
         {
             "member_id": ben["member_id"],
@@ -61,6 +62,7 @@ def test_split_locks_when_every_item_is_claimed_and_confirmed(client, split):
             "tax_minor": 243,
             "tip_minor": 0,
             "total_minor": 3443,
+            "payment": "unpaid",
         },
     ]
     assert sum(s["total_minor"] for s in view["shares"]) == view["total_minor"]

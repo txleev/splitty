@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { ApiError } from '../api/client'
-import { claimItem, confirmClaims } from '../api/sessions'
+import { claimItem, confirmClaims, setMyPaid } from '../api/sessions'
 import { BillTotals } from '../components/BillTotals'
 import { SessionGone } from '../components/SessionGone'
 import { SharesTable } from '../components/SharesTable'
@@ -9,8 +9,10 @@ import { ErrorNotice, LiveBadge, Notice } from '../components/ui'
 import { ClaimList } from '../guest/ClaimList'
 import { ConfirmPanel } from '../guest/ConfirmPanel'
 import { JoinForm } from '../guest/JoinForm'
+import { PayPanel } from '../guest/PayPanel'
 import { estimateSubtotal } from '../lib/claims'
 import { formatMoney } from '../lib/money'
+import { PLATFORM_LABEL } from '../lib/paymentLinks'
 import { clearSeat, loadSeat, saveSeat, type Seat } from '../lib/storage'
 import { useAction } from '../lib/useAction'
 import { useLiveSession } from '../lib/useLiveSession'
@@ -35,8 +37,15 @@ function GuestView({ sessionId }: { sessionId: string }) {
   }
 
   const myMember = seat ? session.members.find((m) => m.id === seat.memberId && m.joined) : undefined
+  // Shares exist only once the split is locked, so the pay panel appears only then.
+  const myShare = myMember
+    ? session.shares?.find((share) => share.member_id === myMember.id)
+    : undefined
   const draft = session.status !== 'ready'
   const openSlots = session.members.filter((m) => !m.joined)
+  const platformName = session.host_payment_platform
+    ? PLATFORM_LABEL[session.host_payment_platform]
+    : null
 
   // The server answers 403 "Unknown member token" once the host has released this name.
   const forgetIfReleased = (caught: unknown): never => {
@@ -62,6 +71,13 @@ function GuestView({ sessionId }: { sessionId: string }) {
     void action.run(() => confirmClaims(sessionId, seat.token).catch(forgetIfReleased))
   }
 
+  const markPaid = (paid: boolean) => {
+    if (!seat) {
+      return Promise.reject(new ApiError(401, 'Join the split first.'))
+    }
+    return setMyPaid(sessionId, seat.token, paid).catch(forgetIfReleased)
+  }
+
   const joined = (next: Seat) => {
     saveSeat(sessionId, next)
     setSeat(next)
@@ -78,7 +94,8 @@ function GuestView({ sessionId }: { sessionId: string }) {
         <BillTotals session={session} />
         {session.host_payment_handle && (
           <p>
-            Pay the host: <strong>{session.host_payment_handle}</strong>
+            Pay the host{platformName ? ` on ${platformName}` : ''}:{' '}
+            <strong>{session.host_payment_handle}</strong>
           </p>
         )}
       </section>
@@ -143,10 +160,20 @@ function GuestView({ sessionId }: { sessionId: string }) {
       )}
 
       {session.locked && session.shares ? (
-        <section className="card stack">
-          <h2>Who pays what</h2>
-          <SharesTable shares={session.shares} currency={session.currency} mineId={myMember?.id} />
-        </section>
+        <>
+          {myShare && (
+            <PayPanel
+              session={session}
+              share={myShare}
+              applySession={applySession}
+              markPaid={markPaid}
+            />
+          )}
+          <section className="card stack">
+            <h2>Who pays what</h2>
+            <SharesTable shares={session.shares} currency={session.currency} mineId={myMember?.id} />
+          </section>
+        </>
       ) : (
         <section className="card stack">
           <h2>Still open</h2>

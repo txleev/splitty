@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { updateBill } from '../api/sessions'
-import type { BillPatch, Session } from '../api/types'
+import type { BillPatch, PaymentPlatform, Session } from '../api/types'
 import { ErrorNotice, Notice } from '../components/ui'
 import { parseAmount, toInputValue } from '../lib/money'
 import { useAction } from '../lib/useAction'
+import { PaymentHandleField } from './PaymentHandleField'
 
 interface Props {
   session: Session
@@ -18,6 +19,7 @@ export function BillForm({ session, hostToken, applySession }: Props) {
   const [tip, setTip] = useState(toInputValue(session.tip_minor))
   const [total, setTotal] = useState(toInputValue(session.total_minor))
   const [handle, setHandle] = useState(session.host_payment_handle ?? '')
+  const [platform, setPlatform] = useState<PaymentPlatform | null>(session.host_payment_platform)
   const [inputError, setInputError] = useState<string | null>(null)
   const action = useAction(applySession)
 
@@ -31,15 +33,21 @@ export function BillForm({ session, hostToken, applySession }: Props) {
       setInputError('Amounts look like 14.50. Leave tax or tip empty if the receipt has none.')
       return
     }
+    if (handle.trim() && !platform) {
+      setInputError('Choose Revolut or Wise for the payment handle.')
+      return
+    }
     setInputError(null)
 
+    const cleanHandle = handle.trim()
     const patch: BillPatch = {
       currency: currency.trim() || null,
       subtotal_minor: subtotalAmount.minor,
       tax_minor: taxAmount.minor,
       tip_minor: tipAmount.minor,
       total_minor: totalAmount.minor,
-      host_payment_handle: handle.trim() || null,
+      host_payment_handle: cleanHandle || null,
+      host_payment_platform: cleanHandle ? platform : null,
     }
     void action.run(() => updateBill(session.session_id, hostToken, patch))
   }
@@ -57,7 +65,7 @@ export function BillForm({ session, hostToken, applySession }: Props) {
           <input
             value={currency}
             onChange={(event) => setCurrency(event.target.value)}
-            placeholder="KGS"
+            placeholder="EUR"
             maxLength={8}
             disabled={action.busy}
           />
@@ -104,16 +112,13 @@ export function BillForm({ session, hostToken, applySession }: Props) {
         />
       </label>
 
-      <label className="field">
-        <span>Payment handle (optional)</span>
-        <input
-          value={handle}
-          onChange={(event) => setHandle(event.target.value)}
-          placeholder="e.g. your Revolut tag"
-          maxLength={64}
-          disabled={action.busy}
-        />
-      </label>
+      <PaymentHandleField
+        handle={handle}
+        platform={platform}
+        disabled={action.busy}
+        onHandleChange={setHandle}
+        onPlatformChange={setPlatform}
+      />
 
       {inputError && <Notice tone="error">{inputError}</Notice>}
       <ErrorNotice error={action.error} />

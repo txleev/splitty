@@ -118,12 +118,13 @@ def test_changing_only_the_payment_handle_keeps_the_split_ready(client, fake_ocr
 
     resp = client.patch(
         f"/sessions/{body['session_id']}",
-        json={"host_payment_handle": "  jack-host  "},
+        json={"host_payment_handle": "  jack-host  ", "host_payment_platform": "revolut"},
         headers=host(body),
     )
 
     assert resp.json()["status"] == "ready"
     assert resp.json()["host_payment_handle"] == "jack-host"
+    assert resp.json()["host_payment_platform"] == "revolut"
 
 
 def test_ready_reports_totals_that_do_not_add_up(client, fake_ocr, clean_db):

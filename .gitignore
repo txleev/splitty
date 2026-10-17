@@ -11,7 +11,6 @@
 *.ico
 
 # JSON
-*.json
 
 # Python
 __pycache__/
@@ -63,3 +62,4 @@ Thumbs.db
 
 # Model cache (downloaded by PaddleOCR)
 ocr-mvp/models/
+.claude/

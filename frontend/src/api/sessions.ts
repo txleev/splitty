@@ -119,3 +119,24 @@ export function confirmClaims(sessionId: string, memberToken: string): Promise<S
     headers: memberHeaders(memberToken),
   })
 }
+
+export function setMyPaid(sessionId: string, memberToken: string, paid: boolean): Promise<Session> {
+  return request<Session>(`${splitPath(sessionId)}/me/paid`, {
+    method: 'PUT',
+    body: { paid },
+    headers: memberHeaders(memberToken),
+  })
+}
+
+export function setMemberPaid(
+  sessionId: string,
+  hostToken: string,
+  memberId: number,
+  paid: boolean,
+): Promise<Session> {
+  return request<Session>(`${splitPath(sessionId)}/members/${memberId}/paid`, {
+    method: 'PUT',
+    body: { paid },
+    headers: hostHeaders(hostToken),
+  })
+}

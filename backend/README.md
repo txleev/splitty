@@ -11,7 +11,7 @@ Base URL in the compose stack: `http://127.0.0.1:8001`.
 | GET    | `/health`                              | anyone    | —                                 |                                                |
 | POST   | `/sessions`                            | anyone    | multipart `file` (image), `note`  | Creates a draft. Returns `host_token` once.    |
 | GET    | `/sessions/{id}`                       | anyone    | —                                 | Current state. Also refreshes the 7-day timer. |
-| PATCH  | `/sessions/{id}`                       | host      | `currency`, `subtotal_minor`, `tax_minor`, `tip_minor`, `total_minor`, `host_payment_handle` | Editing the bill makes it a draft again. |
+| PATCH  | `/sessions/{id}`                       | host      | `currency`, `subtotal_minor`, `tax_minor`, `tip_minor`, `total_minor`, `host_payment_handle`, `host_payment_platform` | Editing the bill makes it a draft again. The handle and platform go together. |
 | POST   | `/sessions/{id}/items`                 | host      | `name`, `quantity`, `unit_price_minor`, `total_minor` |                                    |
 | PATCH  | `/sessions/{id}/items/{item_id}`       | host      | any item field                    | Setting a field clears its `missing` flag.     |
 | DELETE | `/sessions/{id}/items/{item_id}`       | host      | —                                 |                                                |
@@ -24,6 +24,8 @@ Base URL in the compose stack: `http://127.0.0.1:8001`.
 | GET    | `/sessions/{id}/me`                    | guest     | —                                 | Who this token belongs to, and its confirmation state. |
 | PUT    | `/sessions/{id}/items/{item_id}/claim` | guest     | `quantity` (whole number, 0 removes) | Sets this guest's total for the item. Safe to repeat. |
 | POST   | `/sessions/{id}/confirm`               | guest     | —                                 | Confirms current claims. Always allowed to repeat. |
+| PUT    | `/sessions/{id}/me/paid`               | guest     | `paid` (bool)                     | Marks this guest's share as paid, or unmarks it. Marking needs a locked split. |
+| PUT    | `/sessions/{id}/members/{member_id}/paid` | host   | `paid` (bool)                     | Same, for any joined guest, for example a cash payment. |
 | WS     | `/ws/sessions/{id}`                    | anyone    | —                                 | Live view. Sends a snapshot on connect and after every change. |
 
 ### Live updates
@@ -41,6 +43,8 @@ Base URL in the compose stack: `http://127.0.0.1:8001`.
 - `shares` holds each joined guest's exact amounts, but only while the split is locked. Before that it is `null`.
 - A guest's part of a line is their claimed quantity over the line quantity, times the line total. Tax and tip follow each guest's subtotal. The shares always add up to the total. Rounding goes to the largest remainders, and ties go to the earlier joiner.
 - Releasing a name is for guests who lost their browser. The old token stops working, the claims stay, and rejoining with the same name takes the same slot back.
+- Payments: each share has a `payment` of `unpaid`, `paid` or `changed`. Marking a share paid stores the exact amount owed at that moment. If the share moves later, the status becomes `changed` until the guest pays and marks it again. Payments do not affect locking.
+- The payment handle is a username or tag with no spaces, slashes or links. It is stored with its platform, `revolut` or `wise`.
 - Amounts are integers in minor units (`1450` = 14.50).
 - A session expires after 7 days without activity. Unknown and expired sessions both return `404` with the same message.
 - A split can be shared only when every check passes: items have no missing fields, the currency and total are set, items add up to the subtotal, and subtotal + tax + tip = total.

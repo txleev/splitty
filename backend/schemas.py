@@ -29,6 +29,9 @@ class ParsedReceipt(BaseModel):
 
 
 Confirmation = Literal["none", "confirmed", "needs_reconfirm"]
+PaymentPlatform = Literal["revolut", "wise"]
+# "changed": the guest paid an earlier amount, and the share has moved since.
+Payment = Literal["unpaid", "paid", "changed"]
 
 
 # Responses. Amounts are integers in minor units (1450 = 14.50). Quantities are decimals.
@@ -68,6 +71,7 @@ class ShareOut(BaseModel):
     tax_minor: int
     tip_minor: int
     total_minor: int
+    payment: Payment
 
 
 class SessionView(BaseModel):
@@ -81,6 +85,7 @@ class SessionView(BaseModel):
     total_minor: int | None
     warnings: list[str]
     host_payment_handle: str | None
+    host_payment_platform: PaymentPlatform | None
     items: list[ItemOut]
     members: list[MemberOut]
     # Why the host cannot mark the split ready yet. Empty when it can be shared.
@@ -119,6 +124,11 @@ class SessionPatch(BaseModel):
     tip_minor: int | None = None
     total_minor: int | None = None
     host_payment_handle: str | None = Field(default=None, max_length=64)
+    host_payment_platform: PaymentPlatform | None = None
+
+
+class PaidIn(BaseModel):
+    paid: bool
 
 
 class ItemIn(BaseModel):
