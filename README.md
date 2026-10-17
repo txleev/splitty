@@ -1,4 +1,5 @@
 # Splitty
+by Gandalf the Wise
 
 Split a restaurant bill without the arithmetic. The host photographs a receipt, Splitty reads it, and everyone at the table claims what they ate from their own phone. Each person sees their exact share, tax and tip included, and pays the host through Revolut or Wise.
 
@@ -91,7 +92,6 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt pytest httpx
 
 ## Known limitations
 
-- **Not production-ready.** The Room API is bound to localhost only, with no auth or rate limiting beyond session tokens.
 - **Live viewers are capped.** Each open WebSocket holds one Postgres connection (default limit 100). A shared listener is planned.
 - **Tokens live in the browser.** A lost host token cannot be recovered. A guest who loses their browser needs the host to release their name.
 - **Whole-unit claims only.** An item with a fractional quantity cannot be claimed, except with "Split equally".
