@@ -2,18 +2,21 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, Form, Header, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, Request, UploadFile, WebSocket
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 import sessions as rooms
 from db import connect, run_migrations
 from errors import ApiError
+from live import serve as serve_live
 from ocr_client import parse_receipt
 from schemas import (
+    ClaimIn,
     ItemIn,
     ItemPatch,
     JoinOut,
+    MeOut,
     MemberIn,
     ParsedReceipt,
     SessionCreated,
@@ -142,6 +145,26 @@ def remove_member(
     return rooms.remove_member(conn, session_id, x_host_token, member_id)
 
 
+@app.post("/sessions/{session_id}/members/{member_id}/release", response_model=SessionView)
+def release_member(
+    session_id: str,
+    member_id: int,
+    x_host_token: str | None = Header(default=None),
+    conn=Depends(get_conn),
+):
+    return rooms.release_member(conn, session_id, x_host_token, member_id)
+
+
+@app.post("/sessions/{session_id}/members/{member_id}/unlock", response_model=SessionView)
+def unlock_member(
+    session_id: str,
+    member_id: int,
+    x_host_token: str | None = Header(default=None),
+    conn=Depends(get_conn),
+):
+    return rooms.unlock_member(conn, session_id, x_host_token, member_id)
+
+
 @app.post("/sessions/{session_id}/ready", response_model=SessionView)
 def post_ready(
     session_id: str,
@@ -154,3 +177,38 @@ def post_ready(
 @app.post("/sessions/{session_id}/join", response_model=JoinOut, status_code=201)
 def post_join(session_id: str, body: MemberIn, conn=Depends(get_conn)):
     return rooms.join(conn, session_id, body.name)
+
+
+@app.get("/sessions/{session_id}/me", response_model=MeOut)
+def get_me(
+    session_id: str,
+    x_member_token: str | None = Header(default=None),
+    conn=Depends(get_conn),
+):
+    return rooms.get_me(conn, session_id, x_member_token)
+
+
+@app.put("/sessions/{session_id}/items/{item_id}/claim", response_model=SessionView)
+def put_claim(
+    session_id: str,
+    item_id: int,
+    body: ClaimIn,
+    x_member_token: str | None = Header(default=None),
+    conn=Depends(get_conn),
+):
+    return rooms.set_claim(conn, session_id, x_member_token, item_id, body.quantity)
+
+
+@app.post("/sessions/{session_id}/confirm", response_model=SessionView)
+def post_confirm(
+    session_id: str,
+    x_member_token: str | None = Header(default=None),
+    conn=Depends(get_conn),
+):
+    return rooms.confirm(conn, session_id, x_member_token)
+
+
+@app.websocket("/ws/sessions/{session_id}")
+async def session_socket(websocket: WebSocket, session_id: str):
+    """Live view of a split. Sends a snapshot on connect and after every change."""
+    await serve_live(websocket, session_id)

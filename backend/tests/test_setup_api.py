@@ -35,7 +35,7 @@ def test_idle_session_is_gone_for_guests_and_host(client, fake_ocr, clean_db):
     sid = body["session_id"]
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
         conn.execute(
-            "update sessions set last_active_at = now() - interval '25 hours' where id = %s",
+            "update sessions set last_active_at = now() - interval '8 days' where id = %s",
             (sid,),
         )
 
@@ -44,12 +44,24 @@ def test_idle_session_is_gone_for_guests_and_host(client, fake_ocr, clean_db):
     assert client.post(f"/sessions/{sid}/join", json={"name": "Jack"}).status_code == 404
 
 
+def test_a_week_of_inactivity_is_still_alive(client, fake_ocr, clean_db):
+    body = new_session(client)
+    sid = body["session_id"]
+    with psycopg.connect(TEST_URL, autocommit=True) as conn:
+        conn.execute(
+            "update sessions set last_active_at = now() - interval '6 days 23 hours' where id = %s",
+            (sid,),
+        )
+
+    assert client.get(f"/sessions/{sid}").status_code == 200
+
+
 def test_reading_the_session_keeps_it_alive(client, fake_ocr, clean_db):
     body = new_session(client)
     sid = body["session_id"]
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
         conn.execute(
-            "update sessions set last_active_at = now() - interval '23 hours' where id = %s",
+            "update sessions set last_active_at = now() - interval '1 day' where id = %s",
             (sid,),
         )
 
@@ -215,6 +227,7 @@ def test_guest_takes_the_note_slot_ignoring_case(client, fake_ocr, clean_db):
         "id": joined["member_id"],
         "name": "Jack",
         "joined": True,
+        "confirmation": "none",
     }
     assert client.post(f"/sessions/{sid}/join", json={"name": "JACK"}).status_code == 409
 

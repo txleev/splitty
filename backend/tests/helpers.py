@@ -55,3 +55,37 @@ def make_ready(client, body: dict) -> dict:
     resp = client.post(f"/sessions/{body['session_id']}/ready", headers=host(body))
     assert resp.status_code == 200, resp.text
     return resp.json()
+
+
+def join(client, body: dict, name: str) -> dict:
+    resp = client.post(f"/sessions/{body['session_id']}/join", json={"name": name})
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def member_headers(member: dict) -> dict:
+    return {"X-Member-Token": member["member_token"]}
+
+
+def get_view(client, body: dict) -> dict:
+    return client.get(f"/sessions/{body['session_id']}").json()
+
+
+def item_of(view: dict, name: str) -> dict:
+    return next(i for i in view["items"] if i["name"] == name)
+
+
+def member_of(view: dict, name: str) -> dict:
+    return next(m for m in view["members"] if m["name"] == name)
+
+
+def claim(client, body: dict, item_id: int, quantity: int, member: dict):
+    return client.put(
+        f"/sessions/{body['session_id']}/items/{item_id}/claim",
+        json={"quantity": quantity},
+        headers=member_headers(member),
+    )
+
+
+def confirm(client, body: dict, member: dict):
+    return client.post(f"/sessions/{body['session_id']}/confirm", headers=member_headers(member))

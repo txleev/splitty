@@ -52,7 +52,9 @@ def test_note_is_forwarded_to_ocr_and_pre_assignments_are_stored(client, fake_oc
 def test_note_names_become_member_slots(client, fake_ocr, clean_db):
     body = new_session(client, note="Jack and I had the salad")
 
-    assert body["members"] == [{"id": body["members"][0]["id"], "name": "Jack", "joined": False}]
+    assert body["members"] == [
+        {"id": body["members"][0]["id"], "name": "Jack", "joined": False, "confirmation": "none"}
+    ]
 
 
 def test_ocr_unavailable_returns_503_and_creates_nothing(client, monkeypatch, clean_db):

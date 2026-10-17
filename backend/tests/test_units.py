@@ -44,16 +44,18 @@ def test_token_hash_is_deterministic_and_not_the_token():
     assert len(hash_token(token)) == 64
 
 
-def item(name="Tea", total=100, missing=()):
+def item(name="Tea", total=100, missing=(), quantity=1):
     return ItemOut(
         id=1,
         position=1,
         name=name,
-        quantity=1,
+        quantity=quantity,
         unit_price_minor=total,
         total_minor=total,
         missing=list(missing),
         preassigned_names=[],
+        remaining=quantity,
+        claims=[],
     )
 
 
@@ -78,6 +80,19 @@ def test_tax_and_tip_count_toward_the_total():
 
 def test_missing_fields_are_reported_per_item():
     assert problems([item("Tea", missing=["qty"])]) == ["'Tea' is missing: qty."]
+
+
+def test_fractional_quantity_is_reported():
+    assert problems([item("Cheese", quantity=0.75)]) == [
+        "'Cheese' has quantity 0.75. Claims need whole numbers: "
+        "set the quantity to 1 and enter the line total."
+    ]
+
+
+def test_zero_quantity_is_reported():
+    assert problems([item("Free", quantity=0)]) == [
+        "'Free' has no quantity. Set it to 1 or more."
+    ]
 
 
 def test_items_must_add_up_to_the_subtotal():

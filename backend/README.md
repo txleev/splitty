@@ -10,19 +10,39 @@ Base URL in the compose stack: `http://127.0.0.1:8001`.
 |--------|----------------------------------------|-----------|-----------------------------------|------------------------------------------------|
 | GET    | `/health`                              | anyone    | —                                 |                                                |
 | POST   | `/sessions`                            | anyone    | multipart `file` (image), `note`  | Creates a draft. Returns `host_token` once.    |
-| GET    | `/sessions/{id}`                       | anyone    | —                                 | Current state. Also refreshes the 24-hour timer. |
+| GET    | `/sessions/{id}`                       | anyone    | —                                 | Current state. Also refreshes the 7-day timer. |
 | PATCH  | `/sessions/{id}`                       | host      | `currency`, `subtotal_minor`, `tax_minor`, `tip_minor`, `total_minor`, `host_payment_handle` | Editing the bill makes it a draft again. |
 | POST   | `/sessions/{id}/items`                 | host      | `name`, `quantity`, `unit_price_minor`, `total_minor` |                                    |
 | PATCH  | `/sessions/{id}/items/{item_id}`       | host      | any item field                    | Setting a field clears its `missing` flag.     |
 | DELETE | `/sessions/{id}/items/{item_id}`       | host      | —                                 |                                                |
 | POST   | `/sessions/{id}/members`               | host      | `name`                            | Adds a slot guests can claim.                  |
 | DELETE | `/sessions/{id}/members/{member_id}`   | host      | —                                 | Only for slots nobody has joined.              |
+| POST   | `/sessions/{id}/members/{member_id}/release` | host | —                             | Frees a joined name so that guest can rejoin. Their claims stay. |
+| POST   | `/sessions/{id}/members/{member_id}/unlock`  | host | —                             | Clears a guest's confirmation so they check again. |
 | POST   | `/sessions/{id}/ready`                 | host      | —                                 | `409` with `problems` if the bill doesn't check out. |
 | POST   | `/sessions/{id}/join`                  | guest     | `name`                            | Needs a ready split. Returns `member_token` once. |
+| GET    | `/sessions/{id}/me`                    | guest     | —                                 | Who this token belongs to, and its confirmation state. |
+| PUT    | `/sessions/{id}/items/{item_id}/claim` | guest     | `quantity` (whole number, 0 removes) | Sets this guest's total for the item. Safe to repeat. |
+| POST   | `/sessions/{id}/confirm`               | guest     | —                                 | Confirms current claims. Always allowed to repeat. |
+| WS     | `/ws/sessions/{id}`                    | anyone    | —                                 | Live view. Sends a snapshot on connect and after every change. |
 
-- Host actions send the token in the `X-Host-Token` header.
+### Live updates
+
+- Each message is `{"type": "snapshot", "session": {...}}`, with the same shape as `GET /sessions/{id}`. Replace the whole state each time. There is no event replay, so a reconnecting client just takes the next snapshot.
+- Every 25 seconds the server sends `{"type": "ping"}`. Clients can ignore it. It also checks that the split still exists.
+- When the split is unknown or expired, the server sends `{"type": "gone"}` and closes with code `4404`.
+- Changes reach the server through PostgreSQL `LISTEN/NOTIFY`. Triggers in migration `004` send the split id after each commit. Reading a split does not wake other viewers.
+- Each open socket holds one database connection. PostgreSQL allows 100 by default, so this limits the number of live viewers. Phase 8 should add a shared listener.
+
+- Host actions send the token in the `X-Host-Token` header. Guest actions send `X-Member-Token`.
+- Claims stay attached to their item when the host edits it. If a quantity drops below what guests claimed, the item is over-claimed (`remaining` < 0). Affected guests can't confirm until they lower their claims.
+- A confirmation becomes `needs_reconfirm` when the amounts change after the guest confirmed. Changing a claim clears the confirmation.
+- A split locks when every item is fully claimed, every joined guest has confirmed the current bill, and the bill adds up. `blockers` lists what is still missing.
+- `shares` holds each joined guest's exact amounts, but only while the split is locked. Before that it is `null`.
+- A guest's part of a line is their claimed quantity over the line quantity, times the line total. Tax and tip follow each guest's subtotal. The shares always add up to the total. Rounding goes to the largest remainders, and ties go to the earlier joiner.
+- Releasing a name is for guests who lost their browser. The old token stops working, the claims stay, and rejoining with the same name takes the same slot back.
 - Amounts are integers in minor units (`1450` = 14.50).
-- Unknown and expired sessions both return `404` with the same message.
+- A session expires after 7 days without activity. Unknown and expired sessions both return `404` with the same message.
 - A split can be shared only when every check passes: items have no missing fields, the currency and total are set, items add up to the subtotal, and subtotal + tax + tip = total.
 
 ## Run
@@ -49,5 +69,7 @@ python -m venv .venv
 - `sessions.py`: all session logic (create, edit, ready check, join) and the expiry rule.
 - `ocr_client.py`: calls `ocr-mvp /parse`.
 - `schemas.py`: request and response models.
+- `shares.py`: splits a locked bill into each guest's share, with exact rounding.
+- `live.py`: the WebSocket endpoint, which listens for changes and pushes snapshots.
 - `money.py`, `ids.py`, `errors.py`: minor units, IDs and token hashing, and the error type.
 - `db.py`, `migrations/`: connection and SQL migrations, applied in order at startup.

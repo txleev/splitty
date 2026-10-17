@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,7 +28,16 @@ class ParsedReceipt(BaseModel):
     warnings: list[str] = []
 
 
+Confirmation = Literal["none", "confirmed", "needs_reconfirm"]
+
+
 # Responses. Amounts are integers in minor units (1450 = 14.50). Quantities are decimals.
+class ClaimOut(BaseModel):
+    member_id: int
+    name: str
+    quantity: int
+
+
 class ItemOut(BaseModel):
     id: int
     position: int
@@ -37,12 +47,27 @@ class ItemOut(BaseModel):
     total_minor: int
     missing: list[str]
     preassigned_names: list[str]
+    # Quantity minus everyone's claims. Below zero means the item is over-claimed.
+    remaining: float
+    claims: list[ClaimOut]
 
 
 class MemberOut(BaseModel):
     id: int
     name: str
     joined: bool
+    # "none": not confirmed. "confirmed": confirmed on the current bill.
+    # "needs_reconfirm": the bill changed after the guest confirmed.
+    confirmation: Confirmation
+
+
+class ShareOut(BaseModel):
+    member_id: int
+    name: str
+    subtotal_minor: int
+    tax_minor: int
+    tip_minor: int
+    total_minor: int
 
 
 class SessionView(BaseModel):
@@ -60,6 +85,12 @@ class SessionView(BaseModel):
     members: list[MemberOut]
     # Why the host cannot mark the split ready yet. Empty when it can be shared.
     problems: list[str]
+    # True when every item is claimed and every joined guest has confirmed the current bill.
+    locked: bool
+    # What still stops the split from locking. Empty when it is locked.
+    blockers: list[str]
+    # Each joined guest's exact share. None until the split is locked.
+    shares: list[ShareOut] | None
 
 
 class SessionCreated(SessionView):
@@ -72,6 +103,12 @@ class JoinOut(BaseModel):
     name: str
     # Returned once. The guest's browser keeps it. The server stores only its hash.
     member_token: str
+
+
+class MeOut(BaseModel):
+    member_id: int
+    name: str
+    confirmation: Confirmation
 
 
 # Requests
@@ -100,3 +137,8 @@ class ItemPatch(BaseModel):
 
 class MemberIn(BaseModel):
     name: str = Field(min_length=1, max_length=40)
+
+
+class ClaimIn(BaseModel):
+    # The guest's total for this item. Setting it again is safe.
+    quantity: int = Field(ge=0, le=1000)

@@ -161,8 +161,7 @@ def _reconcile(receipt):
 
 
 def structure_receipt(client, grouped_lines, note=None, model=None) -> ParsedReceipt:
-    # model = model or os.environ.get("GROQ_MODEL", DEFAULT_MODEL)
-    model = "openai/gpt-oss-20b"
+    model = model or os.environ.get("GROQ_MODEL", DEFAULT_MODEL)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": _build_user_message(grouped_lines, note)},
